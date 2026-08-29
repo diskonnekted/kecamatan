@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+!.env.production.example
 
 # vercel
 .vercel
@@ -39,3 +41,50 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# sqlite database & runtime data
+/.data/
+
+# logs
+/logs
+*.log
+
+# archive deployment
+/portal-kecamatan.tar.gz
+/portal-kecamatan.zip
+
+# dev / probe scripts
+probe-*.js
+test-*.js
+check-*.js
+dump-*.js
+verify-*.js
+fix-*.js
+match-zones.js
+list-banjarmangu-subdomains.js
+summary-all-desa.js
+investigate.js
+setup-cloudflare-bypass.js
+debug-pren-articles.js
+debug-prendengan.js
+debug-prendengan2.js
+debug-prendengan3.js
+debug-prendengan4.js
+debug-prendengan5.js
+debug-prendengan6.js
+debug-prendengan7.js
+sync-3-desa.ps1
+sync-maja-sijen.ps1
+sync-prendengan.ps1
+sync-sijenggung.ps1
+make-zip.ps1
+*-output.txt
+*-results.txt
+*-context.txt
+*-body.txt
+nav-output.txt
+pren-https.html
+prendengan-full.html
+*.html
+!app/**/*.html
+!components/**/*.html

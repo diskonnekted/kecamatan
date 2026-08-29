@@ -1,69 +1,372 @@
-import Image from "next/image";
+import Link from "next/link";
+import { db } from "@/lib/db";
+import {
+  getAllDesa,
+  getPopularArtikel,
+  getRecentArtikel,
+} from "@/lib/queries";
+import { ArticleCard } from "@/components/article-card";
+import { DesaCard } from "@/components/desa-card";
+import { ArticleRowCard } from "@/components/article-row-card";
+import { OpenDKBox, OpenDKSubBox } from "@/components/opendk-box";
+import { HeroSlider, type HeroSlide } from "@/components/hero-slider";
+import { VisitorCounter } from "@/components/visitor-counter";
+import { SikemaTracker } from "@/components/sikema-tracker";
 
-export default function Home() {
+// Force dynamic to ensure fresh data on each request
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+function formatTanggal(s: string | null): string {
+  if (!s) return "";
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+export default function HomePage() {
+  const recent = getRecentArtikel(13);
+  const popular = getPopularArtikel(5);
+  const desaList = getAllDesa(true);
+
+  const featured = recent[0];
+  const subFeatured = recent.slice(1, 3);
+  const listArtikel = recent.slice(3, 9);
+
+  // hitung artikel per desa untuk badge di kartu desa
+  const counts = db
+    .prepare(
+      "SELECT desa_id, COUNT(*) AS c FROM artikel GROUP BY desa_id",
+    )
+    .all() as Array<{ desa_id: number; c: number }>;
+  const countMap = new Map(counts.map((r) => [r.desa_id, r.c]));
+
+  // Susun slide hero dari featured + 2 subFeatured
+  const heroSlides: HeroSlide[] = [];
+  if (featured) {
+    heroSlides.push({
+      id: featured.id,
+      title: featured.judul,
+      subtitle: featured.ringkasan ?? undefined,
+      image: featured.gambar ?? undefined,
+      href: `/artikel/${featured.desa.slug}/${featured.slug}`,
+      cta: "Baca selengkapnya",
+    });
+  }
+  for (const a of subFeatured) {
+    heroSlides.push({
+      id: a.id,
+      title: a.judul,
+      subtitle: a.ringkasan ?? undefined,
+      image: a.gambar ?? undefined,
+      href: `/artikel/${a.desa.slug}/${a.slug}`,
+      cta: "Baca selengkapnya",
+    });
+  }
+  if (heroSlides.length === 0) {
+    heroSlides.push({
+      id: "default",
+      title: "Selamat Datang di Portal Kecamatan Banjarmangu",
+      subtitle:
+        "Agregator berita & informasi 17 desa di Kabupaten Banjarnegara, Jawa Tengah.",
+      cta: "Jelajahi Desa",
+      href: "/desa",
+    });
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      {/* =============== TOP BAR (OpenDK .topheader) =============== */}
+      <div className="bg-[var(--color-foreground)] text-white text-xs">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="font-semibold tracking-wide">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] mr-2 animate-pulse-soft" />
+            Selamat Datang di Website Kecamatan Banjarmangu
+          </div>
+          <div className="hidden sm:flex items-center gap-3 text-white/80">
+            <span>{formatTanggal(new Date().toISOString())}</span>
+            <span className="h-3 w-px bg-white/20" />
+            <Link href="/admin" className="hover:text-white">
+              Login Admin
+            </Link>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </div>
+
+      {/* =============== HERO SLIDER (OpenDK #swiper-slider) =============== */}
+      <HeroSlider slides={heroSlides} />
+      <div className="h-1 bg-[var(--color-accent)]" />
+
+      {/* =============== MAIN CONTENT (OpenDK .container > .content) =============== */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* ============ KOLOM KIRI (col-md-8) ============ */}
+          <div className="lg:col-span-8 space-y-6">
+            {/* Section header ala OpenDK: fat-arrow + page-header */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-primary)] text-white">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="2" y1="12" x2="22" y2="12" />
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                  </svg>
+                </span>
+                <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[var(--color-foreground)]">
+                  Berita Kecamatan
+                </h2>
+              </div>
+              <div className="h-px bg-[var(--color-border)]" />
+            </div>
+
+            {/* Featured: satu artikel besar */}
+            {featured && (
+              <ArticleCard artikel={featured} variant="featured" />
+            )}
+
+            {/* List artikel: OpenDK-style row card (col-sm-4 img + col-sm-8 content) */}
+            {listArtikel.length > 0 && (
+              <div id="kecamatan" className="space-y-4">
+                {listArtikel.map((a) => (
+                  <ArticleRowCard key={a.id} artikel={a} />
+                ))}
+              </div>
+            )}
+
+            {/* Pagination dummy ala OpenDK */}
+            {listArtikel.length > 0 && (
+              <nav
+                className="flex items-center justify-center gap-1 pt-2"
+                aria-label="Pagination"
+              >
+                {["«", "‹", "1", "2", "›", "»"].map((label, i) => {
+                  const isActive = label === "1";
+                  return (
+                    <Link
+                      key={i}
+                      href="#kecamatan"
+                      className={`min-w-9 h-9 grid place-items-center px-2.5 rounded-md border text-sm font-semibold transition-colors ${
+                        isActive
+                          ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
+                          : "bg-white text-[var(--color-foreground)] border-[var(--color-border)] hover:bg-[var(--color-muted)]"
+                      }`}
+                    >
+                      {label}
+                    </Link>
+                  );
+                })}
+              </nav>
+            )}
+
+            {/* Empty state */}
+            {recent.length === 0 && (
+              <div className="rounded-2xl border-2 border-dashed border-[var(--color-border)] bg-white p-12 text-center">
+                <svg
+                  className="mx-auto mb-4 text-[var(--color-muted-foreground)]"
+                  width="48"
+                  height="48"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </svg>
+                <h3 className="font-serif text-xl font-semibold mb-2">
+                  Belum ada artikel
+                </h3>
+                <p className="text-sm text-[var(--color-muted-foreground)] mb-4">
+                  Jalankan sinkronisasi untuk menarik artikel terbaru dari website
+                  desa.
+                </p>
+                <code className="block bg-[var(--color-muted)] rounded-md p-3 text-xs font-mono">
+                  curl -X POST /api/sync
+                </code>
+              </div>
+            )}
+          </div>
+
+          {/* ============ SIDEBAR (col-md-4) ============ */}
+          <aside className="lg:col-span-4 space-y-5">
+            {/* Box: Aduan Masyarakat (CTA pengaduan + tracking) */}
+            <OpenDKBox
+              title="ADUAN MASYARAKAT"
+              icon={
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              }
+            >
+              <p className="text-xs text-[var(--color-muted-foreground)] mb-3 -mt-1">
+                Sistem Keluhan Masyarakat — sampaikan aduan Anda terkait pelayanan
+                publik di kecamatan.
+              </p>
+              <Link
+                href="/tentang#kontak"
+                className="block w-full text-center px-4 py-2.5 rounded-md bg-[var(--color-warning)] hover:bg-amber-600 text-white text-sm font-bold transition-colors mb-3"
+              >
+                <svg className="inline-block mr-1.5 -mt-0.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+                Kirim Keluhan
+              </Link>
+              <OpenDKSubBox
+                title="Lacak Keluhan Anda"
+                titleClassName="text-[var(--color-foreground)]"
+                icon={
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                }
+              >
+                <SikemaTracker />
+              </OpenDKSubBox>
+
+              {/* TERPOPULER (nested inside SIKEMA box like OpenDK) */}
+              {popular.length > 0 && (
+                <OpenDKSubBox
+                  title="TERPOPULER"
+                  titleClassName="text-[var(--color-primary)]"
+                  icon={
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                      <polyline points="17 6 23 6 23 12" />
+                    </svg>
+                  }
+                >
+                  <ol className="space-y-2">
+                    {popular.slice(0, 5).map((a, idx) => (
+                      <li key={a.id} className="flex gap-2.5">
+                        <span className="flex-shrink-0 h-6 w-6 grid place-items-center rounded-full bg-[var(--color-primary)] text-white text-[11px] font-bold">
+                          {idx + 1}
+                        </span>
+                        <Link
+                          href={`/artikel/${a.desa.slug}/${a.slug}`}
+                          className="text-sm text-[var(--color-foreground)] hover:text-[var(--color-primary)] line-clamp-2 leading-snug"
+                        >
+                          {a.judul}
+                        </Link>
+                      </li>
+                    ))}
+                  </ol>
+                </OpenDKSubBox>
+              )}
+
+              {/* KELUHAN TERJAWAB */}
+              <OpenDKSubBox
+                title="KELUHAN TERJAWAB"
+                titleClassName="text-[var(--color-primary)]"
+                icon={
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                }
+              >
+                <p className="text-xs text-[var(--color-muted-foreground)] text-center py-2">
+                  <svg className="inline-block -mt-0.5 mr-1 text-[var(--color-muted-foreground)]" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                  Data tidak ditemukan.
+                </p>
+              </OpenDKSubBox>
+            </OpenDKBox>
+
+            {/* Box: Media Sosial */}
+            <OpenDKBox
+              title="Media Sosial"
+              icon={
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                </svg>
+              }
+            >
+              <div className="flex flex-wrap items-center gap-2 justify-center">
+                {[
+                  { name: "Facebook", color: "bg-blue-600", short: "Fb" },
+                  { name: "Instagram", color: "bg-gradient-to-br from-purple-500 to-pink-500", short: "Ig" },
+                  { name: "YouTube", color: "bg-red-600", short: "Yt" },
+                  { name: "Twitter", color: "bg-sky-500", short: "X" },
+                  { name: "WhatsApp", color: "bg-emerald-500", short: "Wa" },
+                ].map((s) => (
+                  <a
+                    key={s.name}
+                    href="#"
+                    aria-label={s.name}
+                    className={`h-9 w-9 grid place-items-center rounded-full ${s.color} text-white text-xs font-bold shadow-sm hover:scale-110 transition-transform`}
+                  >
+                    {s.short}
+                  </a>
+                ))}
+              </div>
+            </OpenDKBox>
+
+            {/* Box: PENGUNJUNG (OpenDK #desa-visitor-container) */}
+            <OpenDKBox
+              title="Pengunjung"
+              icon={
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              }
+            >
+              <VisitorCounter />
+            </OpenDKBox>
+          </aside>
         </div>
-      </main>
-    </div>
+      </section>
+
+      {/* =============== DAFTAR DESA =============== */}
+      <section className="bg-white border-t border-[var(--color-border)]">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
+          <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
+            <div>
+              <div className="text-[11px] uppercase tracking-widest text-[var(--color-secondary)] font-bold mb-1">
+                · 17 Desa Terhubung
+              </div>
+              <h2 className="font-serif text-2xl sm:text-3xl font-bold">
+                Portal Desa di Banjarmangu
+              </h2>
+              <p className="text-sm text-[var(--color-muted-foreground)] mt-1">
+                Status sinkronisasi terakhir dari website resmi masing-masing desa
+              </p>
+            </div>
+            <Link
+              href="/desa"
+              className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--color-primary)] hover:underline"
+            >
+              Lihat semua desa
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14" />
+                <path d="m12 5 7 7-7 7" />
+              </svg>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {desaList.map((d) => (
+              <DesaCard
+                key={d.id}
+                desa={d}
+                articleCount={countMap.get(d.id) ?? 0}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+    </>
   );
 }
