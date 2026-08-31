@@ -11,8 +11,14 @@ export interface NavItem {
  */
 export const NAV_LINKS: NavItem[] = [
   { href: "/", label: "Beranda" },
-  { href: "/artikel", label: "Artikel" },
-  { href: "/berita", label: "Berita Kecamatan" },
+  {
+    href: "/artikel",
+    label: "Berita",
+    children: [
+      { href: "/artikel", label: "Berita Desa" },
+      { href: "/berita", label: "Berita Kecamatan" },
+    ],
+  },
   {
     href: "/profil",
     label: "Profil",
