@@ -1,4 +1,5 @@
-import { db, type Desa, type Artikel, type DesaApiKey, type PushInboxEntry, type Unduhan } from './db';
+import { db, type Desa, type Artikel, type DesaApiKey, type PushInboxEntry, type Unduhan, type Aduan } from './db';
+import crypto from 'crypto';
 
 export type ArtikelWithDesa = Artikel & { desa: Pick<Desa, 'slug' | 'nama'> };
 
@@ -260,4 +261,91 @@ export function getUnduhanById(id: number): Unduhan | null {
   ensureUnduhanTable();
   const row = db.prepare("SELECT * FROM unduhan WHERE id = ?").get(id) as Unduhan | undefined;
   return row ?? null;
+}
+
+// === Aduan Masyarakat ===
+
+export const JENIS_ADUAN = [
+  'Pelayanan Publik',
+  'Administrasi Kependudukan',
+  'Infrastruktur',
+  'Keamanan & Ketertiban',
+  'Lingkungan',
+  'Lainnya',
+] as const;
+
+export const STATUS_ADUAN = ['baru', 'diproses', 'selesai', 'ditolak'] as const;
+
+// Nomor aduan unik: ADM-YYYYMMDD-XXXX (dipakai pengadu untuk tracking)
+function generateNomorAduan(): string {
+  const now = new Date();
+  const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const rand = crypto.randomBytes(2).toString('hex').toUpperCase(); // 4 hex char
+  return `ADM-${ymd}-${rand}`;
+}
+
+export function createAduan(input: {
+  desa_id: number | null;
+  jenis: string;
+  isi: string;
+  nama: string;
+  nik: string | null;
+  telepon: string;
+  email: string | null;
+  alamat: string | null;
+}): Aduan {
+  // Coba beberapa kali kalau nomor bentrok (UNIQUE constraint)
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const nomor = generateNomorAduan();
+    try {
+      const res = db
+        .prepare(
+          `INSERT INTO aduan (nomor, desa_id, jenis, isi, nama, nik, telepon, email, alamat)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(nomor, input.desa_id, input.jenis, input.isi, input.nama, input.nik, input.telepon, input.email, input.alamat);
+      return db.prepare('SELECT * FROM aduan WHERE id = ?').get(res.lastInsertRowid) as Aduan;
+    } catch (e) {
+      if (!(e as Error).message.includes('UNIQUE')) throw e;
+    }
+  }
+  throw new Error('Gagal membuat nomor aduan unik');
+}
+
+export type AduanWithDesa = Aduan & { desa_nama: string | null };
+
+export function getAduanByNomor(nomor: string): AduanWithDesa | null {
+  const row = db
+    .prepare(
+      `SELECT a.*, d.nama AS desa_nama
+       FROM aduan a
+       LEFT JOIN desa d ON d.id = a.desa_id
+       WHERE a.nomor = ?`,
+    )
+    .get(nomor.trim().toUpperCase()) as AduanWithDesa | undefined;
+  return row ?? null;
+}
+
+export function getAllAduanAdmin(status?: string): AduanWithDesa[] {
+  const where = status && STATUS_ADUAN.includes(status as (typeof STATUS_ADUAN)[number]) ? 'WHERE a.status = ?' : '';
+  return db
+    .prepare(
+      `SELECT a.*, d.nama AS desa_nama
+       FROM aduan a
+       LEFT JOIN desa d ON d.id = a.desa_id
+       ${where}
+       ORDER BY a.created_at DESC`,
+    )
+    .all(...(where ? [status] : [])) as AduanWithDesa[];
+}
+
+export function getAduanStats(): { total: number; baru: number; diproses: number; selesai: number } {
+  const rows = db.prepare('SELECT status, COUNT(*) AS c FROM aduan GROUP BY status').all() as Array<{ status: string; c: number }>;
+  const map = new Map(rows.map((r) => [r.status, r.c]));
+  return {
+    total: rows.reduce((s, r) => s + r.c, 0),
+    baru: map.get('baru') ?? 0,
+    diproses: map.get('diproses') ?? 0,
+    selesai: map.get('selesai') ?? 0,
+  };
 }

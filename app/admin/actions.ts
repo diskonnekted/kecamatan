@@ -14,6 +14,7 @@ import {
 } from "@/lib/auth";
 import { syncDesa, syncAllDesa } from "@/lib/sync";
 import { scrapeAllStatistik } from "@/lib/statistik";
+import { STATUS_ADUAN } from "@/lib/queries";
 import type { Desa } from "@/lib/db";
 
 export async function loginAction(formData: FormData) {
@@ -433,4 +434,35 @@ export async function togglePublishUnduhanAction(formData: FormData) {
   revalidatePath("/unduhan");
   revalidatePath("/admin/unduhan");
   redirect(`/admin/unduhan?message=Status publikasi dokumen diperbarui`);
+}
+
+/* ====================== ADUAN MASYARAKAT ====================== */
+
+export async function updateAduanAction(formData: FormData) {
+  const id = parseInt(String(formData.get("id") ?? "0"), 10);
+  const status = String(formData.get("status") ?? "").trim();
+  const tanggapan = String(formData.get("tanggapan") ?? "").trim() || null;
+  if (!id) {
+    redirect(`/admin/aduan?error=${encodeURIComponent("ID tidak valid")}`);
+  }
+  if (!STATUS_ADUAN.includes(status as (typeof STATUS_ADUAN)[number])) {
+    redirect(`/admin/aduan?error=${encodeURIComponent("Status tidak valid")}`);
+  }
+  db.prepare("UPDATE aduan SET status = ?, tanggapan = ?, updated_at = datetime('now') WHERE id = ?").run(
+    status,
+    tanggapan,
+    id,
+  );
+  revalidatePath("/admin/aduan");
+  redirect(`/admin/aduan?message=${encodeURIComponent(`Aduan #${id} diperbarui ke status "${status}"`)}`);
+}
+
+export async function deleteAduanAction(formData: FormData) {
+  const id = parseInt(String(formData.get("id") ?? "0"), 10);
+  if (!id) {
+    redirect(`/admin/aduan?error=${encodeURIComponent("ID tidak valid")}`);
+  }
+  db.prepare("DELETE FROM aduan WHERE id = ?").run(id);
+  revalidatePath("/admin/aduan");
+  redirect(`/admin/aduan?message=${encodeURIComponent(`Aduan #${id} dihapus`)}`);
 }

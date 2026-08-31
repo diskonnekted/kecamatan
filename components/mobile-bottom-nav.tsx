@@ -42,6 +42,15 @@ const TABS: Tab[] = [
     ),
   },
   {
+    href: "/aduan",
+    label: "Aduan",
+    icon: () => (
+      <svg width="22" height="22" viewBox="0 0 24 24" {...stroke}>
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      </svg>
+    ),
+  },
+  {
     href: "/tentang",
     label: "Tentang",
     icon: () => (
@@ -90,7 +99,7 @@ export function MobileBottomNav() {
         className="md:hidden fixed inset-x-0 bottom-0 z-40 border-t border-[var(--color-border)] bg-white/95 backdrop-blur-md"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
-        <div className="grid h-16 grid-cols-4">
+        <div className="grid h-16 grid-cols-5">
           {TABS.map((tab) => {
             const active = isActive(tab.href);
             return (

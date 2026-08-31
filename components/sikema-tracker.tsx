@@ -1,18 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export function SikemaTracker() {
   const [id, setId] = useState("");
+  const router = useRouter();
   return (
     <form
       className="flex gap-1.5"
       onSubmit={(e) => {
         e.preventDefault();
-        // Placeholder: hook ke API tracking ketika tersedia
         if (id.trim()) {
-          // eslint-disable-next-line no-alert
-          alert(`Lacak keluhan: ${id} (fitur dalam pengembangan)`);
+          router.push(`/aduan/lacak?nomor=${encodeURIComponent(id.trim().toUpperCase())}`);
         }
       }}
     >

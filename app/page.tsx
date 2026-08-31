@@ -210,7 +210,7 @@ export default function HomePage() {
                 publik di kecamatan.
               </p>
               <Link
-                href="/tentang#kontak"
+                href="/aduan"
                 className="block w-full text-center px-4 py-2.5 rounded-md bg-[var(--color-warning)] hover:bg-amber-600 text-white text-sm font-bold transition-colors mb-3"
               >
                 <svg className="inline-block mr-1.5 -mt-0.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

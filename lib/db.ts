@@ -213,6 +213,29 @@ function ensureSchemaSync(db: Database.Database) {
     );
   `);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_unduhan_kategori ON unduhan(kategori, is_published);`);
+
+  // === Aduan masyarakat ===
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS aduan (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nomor TEXT NOT NULL UNIQUE,
+      desa_id INTEGER REFERENCES desa(id) ON DELETE SET NULL,
+      jenis TEXT NOT NULL,
+      isi TEXT NOT NULL,
+      nama TEXT NOT NULL,
+      nik TEXT,
+      telepon TEXT NOT NULL,
+      email TEXT,
+      alamat TEXT,
+      status TEXT NOT NULL DEFAULT 'baru',
+      tanggapan TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_aduan_nomor ON aduan(nomor);
+    CREATE INDEX IF NOT EXISTS idx_aduan_status ON aduan(status);
+  `);
 }
 
 // Buka koneksi SQLite (singleton via globalThis).
@@ -321,6 +344,23 @@ export type Unduhan = {
   file_size: number | null;
   file_type: string | null;
   is_published: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Aduan = {
+  id: number;
+  nomor: string;
+  desa_id: number | null;
+  jenis: string;
+  isi: string;
+  nama: string;
+  nik: string | null;
+  telepon: string;
+  email: string | null;
+  alamat: string | null;
+  status: string;
+  tanggapan: string | null;
   created_at: string;
   updated_at: string;
 };

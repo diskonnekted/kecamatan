@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { getAllDesa, getArtikelStats, getRecentSyncLogs } from "@/lib/queries";
+import { getAllDesa, getArtikelStats, getRecentSyncLogs, getAduanStats } from "@/lib/queries";
 import { db } from "@/lib/db";
 import {
   logoutAction,
@@ -32,6 +32,7 @@ export default async function AdminDashboardPage({
   const desa = getAllDesa(false);
   const stats = getArtikelStats();
   const logs = getRecentSyncLogs(10);
+  const aduanStats = getAduanStats();
 
   // hitung artikel per desa
   const counts = db
@@ -97,6 +98,15 @@ export default async function AdminDashboardPage({
               Tarik artikel terbaru dari website desa
             </p>
           </div>
+          <Link
+            href="/admin/aduan"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-primary)] hover:bg-[var(--color-foreground)] text-white text-sm font-semibold transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            Aduan{aduanStats.baru > 0 ? ` (${aduanStats.baru} baru)` : ""}
+          </Link>
           <Link
             href="/admin/profil"
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-warning)] hover:bg-amber-600 text-white text-sm font-semibold transition-colors"
