@@ -792,7 +792,16 @@ export async function getStatistikKesehatanDirect(): Promise<StatistikKesehatanD
     byCategory.set(result.cat, arr);
   }
 
-  const getAgg = (cat: string) => aggregateItems(byCategory.get(cat) ?? []);
+  const getAgg = (cat: string) => {
+    // Buang baris "bukan kondisi": TIDAK CACAT / TIDAK DISABILITAS (cacat),
+    // TIDAK ADA/TIDAK SAKIT (penyakit), TIDAK TAHU (gol. darah) — baris-baris
+    // ini berisi warga SEHAT dan menggelembungkan total (mis. cacat jadi 4460
+    // padahal penyandangnya hanya puluhan).
+    const rows = (byCategory.get(cat) ?? []).map((items) =>
+      items.filter((i) => !/^TIDAK/i.test((i.attributes.nama ?? '').trim())),
+    );
+    return aggregateItems(rows);
+  };
   const desaOk = new Set(valid.map((r) => r.desa)).size;
 
   return {
