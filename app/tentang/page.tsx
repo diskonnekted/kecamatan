@@ -144,7 +144,7 @@ export default function TentangPage() {
       </section>
 
       <section className="rounded-2xl bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-foreground)] p-8 sm:p-10 text-white">
-        <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">
+        <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3 !text-white">
           Ingin mencoba?
         </h2>
         <p className="text-white/80 mb-6 max-w-2xl leading-relaxed">

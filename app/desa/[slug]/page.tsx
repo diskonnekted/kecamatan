@@ -101,7 +101,7 @@ export default async function DesaDetailPage({
                   Desa · Kecamatan Banjarmangu
                 </div>
               </div>
-              <h1 className="font-serif text-4xl sm:text-5xl font-bold leading-tight mb-3">
+              <h1 className="font-serif text-4xl sm:text-5xl font-bold leading-tight mb-3 !text-white">
                 Desa {desa.nama}
               </h1>
               <a
