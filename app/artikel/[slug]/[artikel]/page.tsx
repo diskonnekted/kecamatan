@@ -63,6 +63,8 @@ async function fetchArticleContent(
     // OpenSID default uses Indonesian spelling (.artikel-content),
     // OpenSID Esensi/Natra theme (desa.id) uses .content-isi inside #printing
     const contentSelectors = [
+      ".artikelpage .isicontent",
+      ".isicontent",
       ".content-isi",
       "#printing .content-area",
       ".article-content",

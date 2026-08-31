@@ -58,6 +58,16 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+// URL yang menunjuk ke file media/upload — bukan halaman artikel.
+// Contoh kasus: tema OpenSID Sijenggung membungkus gambar beranda dengan
+// <a data-fancybox href=".../desa/upload/artikel/sedang_xxx.webp">, dan path
+// "/desa/upload/artikel/" ikut cocok dengan selector a[href*="/artikel/"].
+const MEDIA_URL_RE = /\.(webp|jpe?g|png|gif|svg|mp4|pdf)(\?.*)?$/i;
+
+function isMediaUrl(href: string): boolean {
+  return MEDIA_URL_RE.test(href) || /\/upload\//i.test(href);
+}
+
 async function fetchText(url: string, timeoutMs = FETCH_TIMEOUT): Promise<string> {
   // Daftar User-Agent untuk rotasi (kadang Cloudflare membedakan tantangan berdasarkan UA)
   const UAS = [
@@ -227,6 +237,11 @@ async function fetchScrape(desa: Desa): Promise<Artikel[]> {
     $(target.itemSelector).each((_i, el) => {
     const $el = $(el);
 
+    // Lewati container pembungkus yang di dalamnya masih ada item artikel
+    // lain (mis. <div class="artikelhome"> membungkus banyak .articlerow-box
+    // — judulnya cuma heading section seperti "Artikel").
+    if ($el.find(target.itemSelector).length > 0) return;
+
     // Cari judul
     const $titleEl = $el.find(target.titleSelector).first();
     let judul = $titleEl.text().trim();
@@ -234,13 +249,30 @@ async function fetchScrape(desa: Desa): Promise<Artikel[]> {
     if (!judul && $titleEl.is('a')) judul = $titleEl.attr('title') || '';
     if (!judul) return;
 
-    // Cari link
-    const $linkEl = $el.find(target.linkSelector).first();
-    let href = $linkEl.attr('href') || $titleEl.parent('a').attr('href') || $titleEl.attr('href') || '';
-    if (!href && $el.is('a')) href = $el.attr('href') || '';
+    // Cari link — kumpulkan semua kandidat, ambil yang pertama BUKAN file media.
+    // (Tema OpenSID Sijenggung punya <a> fancybox ke file .webp sebelum link judul.)
+    const linkCandidates: string[] = [];
+    $el.find(target.linkSelector).each((_j, a) => {
+      const h = $(a).attr('href');
+      if (h) linkCandidates.push(h);
+    });
+    const tParent = $titleEl.parent('a').attr('href');
+    if (tParent) linkCandidates.push(tParent);
+    const tSelf = $titleEl.attr('href');
+    if (tSelf) linkCandidates.push(tSelf);
+    if ($el.is('a')) {
+      const selfHref = $el.attr('href');
+      if (selfHref) linkCandidates.push(selfHref);
+    }
+    const href =
+      linkCandidates.find((h) => !isMediaUrl(h)) ??
+      linkCandidates[0] ??
+      '';
     if (!href) return;
 
     const absUrl = absolutizeUrl(href, desa.website);
+    // Buang item yang link-nya tetap file media (bukan halaman artikel)
+    if (isMediaUrl(absUrl)) return;
 
     // Gambar
     const $img = $el.find(target.imageSelector).first();
@@ -294,9 +326,18 @@ async function fetchScrape(desa: Desa): Promise<Artikel[]> {
       if (authorText) penulis = authorText;
     }
 
-    // Ringkasan
-    const $excEl = $el.find(target.excerptSelector).first();
-    const ringkasan = $excEl.text().trim().slice(0, 320) || null;
+    // Ringkasan: ambil paragraf pertama yang bukan info meta
+    // (tema Sijenggung tidak punya excerpt — <p> di dalamnya hanya berisi
+    // "Admin : X", "157 Kali dibuka", "Buka Halaman").
+    let ringkasan: string | null = null;
+    $el.find(target.excerptSelector).each((_j, p) => {
+      if (ringkasan) return;
+      const $p = $(p);
+      if ($p.closest('.artikelmeta, .artikelhome-info, .metadate, .metanext').length) return;
+      const t = $p.text().replace(/\s+/g, ' ').trim();
+      if (t.length < 40) return;
+      ringkasan = t.slice(0, 320);
+    });
 
     candidate.push({
       id: 0,
