@@ -26,8 +26,10 @@ export async function GET(req: NextRequest) {
     try {
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), 30000);
+      // Pakai GET, bukan HEAD — beberapa server desa.id membalas 404 untuk HEAD
+      // padahal GET berhasil. Body langsung dibatalkan agar tidak download penuh.
       const res = await fetch(url, {
-        method: 'HEAD',
+        method: 'GET',
         redirect: 'follow',
         signal: controller.signal,
         headers: {
@@ -36,6 +38,7 @@ export async function GET(req: NextRequest) {
         },
       });
       clearTimeout(t);
+      res.body?.cancel().catch(() => {});
       probes[label] = {
         url,
         status: res.status,

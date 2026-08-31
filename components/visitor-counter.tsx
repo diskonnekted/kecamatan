@@ -8,14 +8,9 @@
  *   Tahun     = bg-gray
  *   Total     = bg-blue
  */
-export type VisitorStats = {
-  hariIni: number;
-  kemarin: number;
-  mingguIni: number;
-  bulanIni: number;
-  tahunIni: number;
-  total: number;
-};
+import type { VisitorStats } from "@/lib/visitor";
+
+export type { VisitorStats };
 
 const EMPTY: VisitorStats = {
   hariIni: 0,

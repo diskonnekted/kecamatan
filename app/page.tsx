@@ -12,6 +12,7 @@ import { OpenDKBox, OpenDKSubBox } from "@/components/opendk-box";
 import { HeroSlider, type HeroSlide } from "@/components/hero-slider";
 import { VisitorCounter } from "@/components/visitor-counter";
 import { SikemaTracker } from "@/components/sikema-tracker";
+import { getVisitorStats } from "@/lib/visitor";
 
 // Force dynamic to ensure fresh data on each request
 export const dynamic = "force-dynamic";
@@ -323,7 +324,7 @@ export default function HomePage() {
                 </svg>
               }
             >
-              <VisitorCounter />
+              <VisitorCounter stats={getVisitorStats()} />
             </OpenDKBox>
           </aside>
         </div>

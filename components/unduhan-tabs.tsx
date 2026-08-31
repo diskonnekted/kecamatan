@@ -8,12 +8,12 @@ export function UnduhanTabNav({ active }: { active: string }) {
     { href: "/unduhan/form-dokumen", label: "Dokumen", key: "form-dokumen" },
   ];
   return (
-    <div className="flex flex-wrap gap-2 mb-8 border-b border-[var(--color-border)] pb-1">
+    <div className="flex flex-nowrap md:flex-wrap gap-2 mb-8 border-b border-[var(--color-border)] pb-1 overflow-x-auto scrollbar-hide">
       {tabs.map((tab) => (
         <a
           key={tab.key}
           href={tab.href}
-          className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+          className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
             active === tab.key
               ? "text-[var(--color-primary)] border-b-2 border-[var(--color-primary)] -mb-px"
               : "text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"

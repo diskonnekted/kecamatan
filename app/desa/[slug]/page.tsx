@@ -53,19 +53,21 @@ export default async function DesaDetailPage({
       .get(slug) as { c: number }
   ).c;
 
-  const statusLabel =
-    desa.last_sync_status === "success"
-      ? "Sinkron sukses"
-      : desa.last_sync_status === "failed"
-        ? "Sinkron gagal"
-        : "Belum disinkron";
+  // Nilai status di DB: 'ok' (ditulis syncDesa & push API), 'failed', atau null.
+  // 'success' ditoleransi untuk kompatibilitas data lama.
+  const isOk = desa.last_sync_status === "ok" || desa.last_sync_status === "success";
+  const isFailed = !!desa.last_sync_at && !isOk;
+  const statusLabel = isOk
+    ? "Sinkron sukses"
+    : isFailed
+      ? "Sinkron gagal"
+      : "Belum disinkron";
 
-  const statusColor =
-    desa.last_sync_status === "success"
-      ? "bg-[var(--color-accent)]/10 text-[var(--color-accent)] border-[var(--color-accent)]/30"
-      : desa.last_sync_status === "failed"
-        ? "bg-[var(--color-destructive)]/10 text-[var(--color-destructive)] border-[var(--color-destructive)]/30"
-        : "bg-[var(--color-warning)]/10 text-[var(--color-warning)] border-[var(--color-warning)]/30";
+  const statusColor = isOk
+    ? "bg-[var(--color-accent)]/10 text-[var(--color-accent)] border-[var(--color-accent)]/30"
+    : isFailed
+      ? "bg-[var(--color-destructive)]/10 text-[var(--color-destructive)] border-[var(--color-destructive)]/30"
+      : "bg-[var(--color-warning)]/10 text-[var(--color-warning)] border-[var(--color-warning)]/30";
 
   return (
     <>

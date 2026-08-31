@@ -55,6 +55,27 @@ body {
   font-feature-settings: "ss01", "ss02";
 }
 
+/* Animasi banner install PWA */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Sembunyikan scrollbar untuk tab horizontal di mobile */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Headings use editorial serif */
 h1, h2, h3, h4 {
   font-family: var(--font-serif);

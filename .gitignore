@@ -45,6 +45,9 @@ next-env.d.ts
 # sqlite database & runtime data
 /.data/
 
+# catatan internal berisi kredensial — JANGAN di-push
+/dokumentasi.md
+
 # logs
 /logs
 *.log

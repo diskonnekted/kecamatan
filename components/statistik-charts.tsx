@@ -22,7 +22,10 @@ export function StatCard({ label, value, icon, color = "text-gray-700", sub }: {
 export function DonutChart({ data }: { data: Array<{ label: string; value: number; color: string }> }) {
   const total = data.reduce((sum, d) => sum + d.value, 0) || 1;
   const filtered = data.filter(d => d.value > 0);
-  let cumulativePct = 0;
+  // Persentase kumulatif tiap segmen, dihitung immutabel (bukan reassign saat render)
+  const startPcts = filtered.map((_, i) =>
+    filtered.slice(0, i).reduce((sum, d) => sum + (d.value / total) * 100, 0)
+  );
   const radius = 60;
   const stroke = 25;
   const circumference = 2 * Math.PI * radius;
@@ -34,8 +37,7 @@ export function DonutChart({ data }: { data: Array<{ label: string; value: numbe
         {filtered.map((d, i) => {
           const pct = (d.value / total) * 100;
           const dash = (pct / 100) * circumference;
-          const offset = -((cumulativePct / 100) * circumference);
-          cumulativePct += pct;
+          const offset = -((startPcts[i] / 100) * circumference);
           return (
             <circle
               key={i}
@@ -115,12 +117,12 @@ export function StatistikTabNav({ active }: { active: string }) {
     { href: "/statistik/anggaran-dan-realisasi", label: "Anggaran dan Realisasi", key: "anggaran" },
   ];
   return (
-    <div className="flex flex-wrap gap-2 mb-8 border-b border-[var(--color-border)] pb-1">
+    <div className="flex flex-nowrap md:flex-wrap gap-2 mb-8 border-b border-[var(--color-border)] pb-1 overflow-x-auto scrollbar-hide">
       {tabs.map((tab) => (
         <a
           key={tab.key}
           href={tab.href}
-          className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+          className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
             active === tab.key
               ? "text-[var(--color-primary)] border-b-2 border-[var(--color-primary)] -mb-px"
               : "text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"

@@ -8,10 +8,11 @@ export const metadata = {
 };
 
 const PDF_URL = "https://banjarmangu.banjarnegarakab.go.id/wp-content/uploads/2026/08/SK-PENUNJUKAN-PEJABAT-PENGELOLA-INFORMASI-DAN-DOKUMENTASI-PPID-.pdf";
+// Embed via proxy lokal (server asal mengirim X-Frame-Options: SAMEORIGIN)
+const EMBED_URL = "/ppid/surat-keputusan/pdf";
 
 export default function PpidSkPage() {
   const profil = getProfilKecamatan();
-  const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(PDF_URL)}&embedded=true&hl=en`;
 
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
@@ -59,7 +60,7 @@ export default function PpidSkPage() {
           </div>
           <iframe
             title="SK PPID"
-            src={viewerUrl}
+            src={EMBED_URL}
             className="w-full"
             style={{ height: "75vh", minHeight: "600px", border: 0 }}
           />

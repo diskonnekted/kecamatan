@@ -144,6 +144,13 @@ function ensureSchemaSync(db: Database.Database) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_push_inbox_desa ON push_inbox(desa_id, created_at DESC);`);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS visitor_daily (
+      date TEXT PRIMARY KEY,
+      count INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS profil_kecamatan (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nama_kecamatan TEXT NOT NULL DEFAULT 'Banjarmangu',
