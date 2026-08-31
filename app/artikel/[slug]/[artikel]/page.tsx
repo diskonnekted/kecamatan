@@ -60,8 +60,11 @@ async function fetchArticleContent(
 
     // Try multiple selectors for article content (OpenSID themes vary)
     // OpenDesa theme uses English spelling (.article-content),
-    // OpenSID default uses Indonesian spelling (.artikel-content)
+    // OpenSID default uses Indonesian spelling (.artikel-content),
+    // OpenSID Esensi/Natra theme (desa.id) uses .content-isi inside #printing
     const contentSelectors = [
+      ".content-isi",
+      "#printing .content-area",
       ".article-content",
       ".article-body",
       ".artikel-content",
@@ -84,7 +87,7 @@ async function fetchArticleContent(
       const $el = $(sel).first();
       if ($el.length) {
         // Remove the title heading from content (already shown in hero)
-        $el.find("h1, h2.title, .artikel-title, .entry-title, .post-title").remove();
+        $el.find("h1, h2.title, .artikel-title, .entry-title, .post-title, .head-content").remove();
         const html2 = $el.html()?.trim();
         if (html2 && html2.length > 100) {
           konten = html2;
@@ -150,10 +153,12 @@ export default async function ArtikelDetailPage({
   // Increment view count
   db.prepare("UPDATE artikel SET view_count = view_count + 1 WHERE id = ?").run(a.id);
 
-  // If both ringkasan and konten are NULL, fetch content on-the-fly from source
+  // Fetch konten lengkap dari situs desa jika konten belum ada ATAU hanya berisi
+  // excerpt RSS (feed OpenSID memotong isi artikel dengan akhiran "[...]").
   let ringkasan = a.ringkasan;
   let konten = a.konten;
-  if (!ringkasan && !konten && a.url) {
+  const kontenHanyaExcerpt = !konten || stripHtml(konten).endsWith("[...]");
+  if (kontenHanyaExcerpt && a.url) {
     const fetched = await fetchArticleContent(a.url);
     if (fetched) {
       ringkasan = fetched.ringkasan;

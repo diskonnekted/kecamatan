@@ -493,8 +493,18 @@ function upsertArtikel(items: Artikel[], desaId: number): { newCount: number; up
     ON CONFLICT(desa_id, slug) DO UPDATE SET
       judul = excluded.judul,
       url = excluded.url,
-      ringkasan = excluded.ringkasan,
-      konten = excluded.konten,
+      -- Jangan timpa ringkasan/konten yang lebih lengkap (mis. hasil fetch halaman
+      -- detail) dengan excerpt RSS/push yang lebih pendek.
+      ringkasan = CASE
+        WHEN length(COALESCE(excluded.ringkasan, '')) > length(COALESCE(artikel.ringkasan, ''))
+        THEN excluded.ringkasan
+        ELSE artikel.ringkasan
+      END,
+      konten = CASE
+        WHEN length(COALESCE(excluded.konten, '')) > length(COALESCE(artikel.konten, ''))
+        THEN excluded.konten
+        ELSE artikel.konten
+      END,
       gambar = excluded.gambar,
       penulis = excluded.penulis,
       kategori = excluded.kategori,

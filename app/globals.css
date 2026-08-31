@@ -113,6 +113,14 @@ h1, h2, h3, h4 {
   color: #1f2937;
   font-size: 1.05rem;
 }
+/* Clearfix: konten scrape sering berisi gambar float:left inline;
+   tanpa ini elemen float bocor keluar container dan mengacaukan
+   layout elemen setelah artikel (share buttons, CTA card) */
+.prose-article::after {
+  content: "";
+  display: table;
+  clear: both;
+}
 .prose-article p { margin: 1.1em 0; }
 .prose-article h2 {
   font-size: 1.6rem;
