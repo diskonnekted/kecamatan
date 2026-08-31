@@ -8,8 +8,23 @@ const USER_AGENT =
   '(PortalKecamatanBanjarmangu/1.0)';
 
 const FETCH_TIMEOUT = 60_000; // 60 detik (default)
-const RSS_TIMEOUT = 120_000; // 120 detik (feed Sijenggung ~90MB)
+const RSS_TIMEOUT = 120_000; // 120 detik
 const MAX_RESPONSE_BYTES = 200 * 1024 * 1024; // 200MB hard cap
+
+// Batas artikel terbaru yang diambil per desa per sync. Dipilih 20 berdasarkan
+// uji streaming ke feed Sijenggung (~90MB): 20 item pertama hanya ±2 MB / ±2,5
+// detik, sedangkan 50 item sudah ±86 MB (konten per-artikel sangat besar).
+const MAX_ARTIKEL_PER_DESA = 20;
+// Cap keras saat streaming feed RSS (jaga-jaga jika 20 item tidak kunjung
+// tercapai karena feed berisi sedikit <item> tapi ukurannya raksasa).
+const RSS_STREAM_MAX_BYTES = 150 * 1024 * 1024;
+
+// Daftar User-Agent untuk rotasi (kadang Cloudflare membedakan tantangan berdasarkan UA)
+const UAS = [
+  USER_AGENT,
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+];
 
 type SyncResult = {
   status: 'ok' | 'partial' | 'failed';
@@ -69,12 +84,6 @@ function isMediaUrl(href: string): boolean {
 }
 
 async function fetchText(url: string, timeoutMs = FETCH_TIMEOUT): Promise<string> {
-  // Daftar User-Agent untuk rotasi (kadang Cloudflare membedakan tantangan berdasarkan UA)
-  const UAS = [
-    USER_AGENT,
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  ];
   const maxAttempts = 3;
   let lastErr: Error | null = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -133,10 +142,99 @@ async function fetchText(url: string, timeoutMs = FETCH_TIMEOUT): Promise<string
 
 /* ====================== RSS ====================== */
 
+// Download feed RSS sebagai stream dan BERHENTI setelah MAX_ARTIKEL_PER_DESA
+// item, lalu rekonstruksi XML valid (preamble + item-item + penutup) supaya
+// tetap bisa diparse rss-parser seperti biasa. Ini menyelesaikan feed raksasa
+// seperti Sijenggung (~90MB) yang sebelumnya selalu gagal diparse utuh
+// ("Maximum call stack size exceeded") — kini cukup ±2 MB untuk 20 item.
+// Potong XML feed tepat setelah </item> ke-N dan tutup manual, sehingga hasilnya
+// tetap XML valid untuk rss-parser. Mengembalikan '' jika tidak ada item lengkap.
+function cutRssXml(buf: string): string {
+  const itemOpen = buf.search(/<item[\s>]/);
+  if (itemOpen === -1) return '';
+  let pos = -1;
+  for (let i = 0; i < MAX_ARTIKEL_PER_DESA; i++) {
+    const next = buf.indexOf('</item>', pos + 1);
+    if (next === -1) break;
+    pos = next;
+  }
+  if (pos === -1) return '';
+  const preamble = buf.slice(0, itemOpen); // <?xml...><rss...><channel>...
+  const itemsXml = buf.slice(itemOpen, pos + '</item>'.length);
+  return preamble + itemsXml + '\n</channel></rss>';
+}
+
+async function fetchRssXml(url: string, timeoutMs: number): Promise<string> {
+  const maxAttempts = 3;
+  let lastErr: Error | null = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const ua = UAS[(attempt - 1) % UAS.length];
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': ua,
+          Accept: 'application/rss+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'id,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Cache-Control': 'no-cache',
+        },
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) {
+        // Retry hanya untuk 403/408/429/5xx (Cloudflare/challenge)
+        if ([403, 408, 429, 502, 503, 504].includes(res.status) && attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 2000 + Math.floor(Math.random() * 3000)));
+          continue;
+        }
+        throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let bytes = 0;
+      let streamErr: Error | null = null;
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          bytes += value.length;
+          buf += decoder.decode(value, { stream: true });
+          const itemCount = (buf.match(/<\/item>/g) ?? []).length;
+          if (itemCount >= MAX_ARTIKEL_PER_DESA || bytes > RSS_STREAM_MAX_BYTES) break;
+        }
+      } catch (e) {
+        // Stream putus/timeout di tengah (mis. server desa intermiten lambat) —
+        // selamatkan item yang sudah terdownload lengkap daripada gagal total.
+        streamErr = e as Error;
+      }
+      await reader.cancel().catch(() => {});
+
+      // Feed kecil yang terdownload lengkap: parse apa adanya.
+      if (!streamErr && buf.includes('</rss>')) return buf;
+      const xml = cutRssXml(buf);
+      if (xml) return xml;
+      throw streamErr ?? new Error('feed tidak memuat item lengkap');
+    } catch (e) {
+      lastErr = e as Error;
+      if (attempt < maxAttempts && (e as Error).name !== 'AbortError') {
+        await new Promise((r) => setTimeout(r, 2000 + Math.floor(Math.random() * 3000)));
+        continue;
+      }
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastErr ?? new Error('fetch rss failed after retries');
+}
+
 async function fetchRss(desa: Desa): Promise<Artikel[]> {
   if (!desa.feed_url) return [];
   const parser = new Parser({ timeout: RSS_TIMEOUT, customFields: {} });
-  const xml = await fetchText(desa.feed_url, RSS_TIMEOUT);
+  const xml = await fetchRssXml(desa.feed_url, RSS_TIMEOUT);
   const feed = await parser.parseString(xml);
   const items: Artikel[] = [];
   for (const it of feed.items ?? []) {
@@ -691,6 +789,14 @@ export async function syncDesa(desa: Desa): Promise<SyncResult> {
       source: 'rss',
     };
   }
+
+  // Batasi ke N artikel terbaru per desa — berlaku untuk semua sumber
+  // (RSS sudah dipotong saat streaming; API/scrape dipotong di sini).
+  // Item tanpa tanggal ditaruh di urutan akhir.
+  items = items
+    .slice()
+    .sort((a, b) => (b.published_at ?? '').localeCompare(a.published_at ?? ''))
+    .slice(0, MAX_ARTIKEL_PER_DESA);
 
   const { newCount, updatedCount } = upsertArtikel(items, desa.id);
   const source: SyncResult['source'] =
