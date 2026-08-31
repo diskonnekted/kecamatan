@@ -126,7 +126,16 @@ export function Footer() {
           </div>
           <div className="flex items-center gap-2">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] animate-pulse-soft" />
-            Dibangun dengan Next.js · Data agregat dari situs desa
+            Dibangun oleh{" "}
+            <a
+              href="https://sid.clasnet.co.id"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-[var(--color-foreground)] hover:text-[var(--color-primary)] transition-colors"
+            >
+              Clasnet
+            </a>{" "}
+            · Data agregat dari situs desa
           </div>
         </div>
       </div>
