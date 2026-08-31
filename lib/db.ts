@@ -236,6 +236,38 @@ function ensureSchemaSync(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_aduan_nomor ON aduan(nomor);
     CREATE INDEX IF NOT EXISTS idx_aduan_status ON aduan(status);
   `);
+
+  // === Artikel / berita kecamatan (konten manual, bukan hasil sync desa) ===
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS artikel_kecamatan (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      judul TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      ringkasan TEXT,
+      konten TEXT,
+      gambar_utama TEXT,
+      penulis TEXT,
+      kategori TEXT,
+      is_published INTEGER NOT NULL DEFAULT 1,
+      view_count INTEGER NOT NULL DEFAULT 0,
+      published_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_artikel_kecamatan_pub ON artikel_kecamatan(is_published, published_at);
+
+    CREATE TABLE IF NOT EXISTS artikel_kecamatan_foto (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      artikel_id INTEGER NOT NULL REFERENCES artikel_kecamatan(id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      caption TEXT,
+      urutan INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_artikel_kecamatan_foto ON artikel_kecamatan_foto(artikel_id, urutan);
+  `);
 }
 
 // Buka koneksi SQLite (singleton via globalThis).
@@ -363,6 +395,31 @@ export type Aduan = {
   tanggapan: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ArtikelKecamatan = {
+  id: number;
+  judul: string;
+  slug: string;
+  ringkasan: string | null;
+  konten: string | null;
+  gambar_utama: string | null;
+  penulis: string | null;
+  kategori: string | null;
+  is_published: number;
+  view_count: number;
+  published_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ArtikelKecamatanFoto = {
+  id: number;
+  artikel_id: number;
+  url: string;
+  caption: string | null;
+  urutan: number;
+  created_at: string;
 };
 
 // Dipakai oleh lib/init.ts untuk ensureSchema idempotent

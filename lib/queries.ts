@@ -1,4 +1,4 @@
-import { db, type Desa, type Artikel, type DesaApiKey, type PushInboxEntry, type Unduhan, type Aduan } from './db';
+import { db, type Desa, type Artikel, type DesaApiKey, type PushInboxEntry, type Unduhan, type Aduan, type ArtikelKecamatan, type ArtikelKecamatanFoto } from './db';
 import crypto from 'crypto';
 
 export type ArtikelWithDesa = Artikel & { desa: Pick<Desa, 'slug' | 'nama'> };
@@ -348,4 +348,70 @@ export function getAduanStats(): { total: number; baru: number; diproses: number
     diproses: map.get('diproses') ?? 0,
     selesai: map.get('selesai') ?? 0,
   };
+}
+
+// === Artikel / Berita Kecamatan (konten manual) ===
+
+export const KATEGORI_BERITA = ['Berita', 'Pengumuman', 'Kegiatan', 'Pelayanan'] as const;
+
+// Slug URL-friendly dari judul (unik divalidasi saat insert/update)
+export function slugifyBerita(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 200);
+}
+
+export function getBeritaById(id: number): ArtikelKecamatan | null {
+  const row = db.prepare('SELECT * FROM artikel_kecamatan WHERE id = ?').get(id) as ArtikelKecamatan | undefined;
+  return row ?? null;
+}
+
+export function getBeritaBySlug(slug: string, publishedOnly = true): ArtikelKecamatan | null {
+  const row = db
+    .prepare(`SELECT * FROM artikel_kecamatan WHERE slug = ? ${publishedOnly ? 'AND is_published = 1' : ''}`)
+    .get(slug) as ArtikelKecamatan | undefined;
+  return row ?? null;
+}
+
+export function getBeritaFotos(artikelId: number): ArtikelKecamatanFoto[] {
+  return db
+    .prepare('SELECT * FROM artikel_kecamatan_foto WHERE artikel_id = ? ORDER BY urutan ASC, id ASC')
+    .all(artikelId) as ArtikelKecamatanFoto[];
+}
+
+export function getRecentBerita(limit = 4): ArtikelKecamatan[] {
+  return db
+    .prepare('SELECT * FROM artikel_kecamatan WHERE is_published = 1 ORDER BY published_at DESC, id DESC LIMIT ?')
+    .all(limit) as ArtikelKecamatan[];
+}
+
+export function getBeritaPaginated(page: number, pageSize: number): { items: ArtikelKecamatan[]; total: number } {
+  const total = (db.prepare('SELECT COUNT(*) AS c FROM artikel_kecamatan WHERE is_published = 1').get() as { c: number }).c;
+  const items = db
+    .prepare('SELECT * FROM artikel_kecamatan WHERE is_published = 1 ORDER BY published_at DESC, id DESC LIMIT ? OFFSET ?')
+    .all(pageSize, (page - 1) * pageSize) as ArtikelKecamatan[];
+  return { items, total };
+}
+
+export function getAllBeritaAdmin(): ArtikelKecamatan[] {
+  return db
+    .prepare('SELECT * FROM artikel_kecamatan ORDER BY created_at DESC, id DESC')
+    .all() as ArtikelKecamatan[];
+}
+
+// Untuk "berita lainnya" di halaman detail
+export function getBeritaLainnya(excludeId: number, limit = 4): ArtikelKecamatan[] {
+  return db
+    .prepare('SELECT * FROM artikel_kecamatan WHERE is_published = 1 AND id != ? ORDER BY published_at DESC, id DESC LIMIT ?')
+    .all(excludeId, limit) as ArtikelKecamatan[];
+}
+
+export function incrementBeritaView(id: number) {
+  db.prepare('UPDATE artikel_kecamatan SET view_count = view_count + 1 WHERE id = ?').run(id);
 }

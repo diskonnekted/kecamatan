@@ -4,8 +4,10 @@ import {
   getAllDesa,
   getPopularArtikel,
   getRecentArtikel,
+  getRecentBerita,
 } from "@/lib/queries";
 import { ArticleCard } from "@/components/article-card";
+import { BeritaCard } from "@/components/berita-card";
 import { DesaCard } from "@/components/desa-card";
 import { ArticleRowCard } from "@/components/article-row-card";
 import { OpenDKBox, OpenDKSubBox } from "@/components/opendk-box";
@@ -33,6 +35,7 @@ export default function HomePage() {
   const recent = getRecentArtikel(13);
   const popular = getPopularArtikel(5);
   const desaList = getAllDesa(true);
+  const beritaKecamatan = getRecentBerita(4);
 
   const featured = recent[0];
   const subFeatured = recent.slice(1, 3);
@@ -329,6 +332,43 @@ export default function HomePage() {
           </aside>
         </div>
       </section>
+
+      {/* =============== BERITA KECAMATAN =============== */}
+      {beritaKecamatan.length > 0 && (
+        <section className="bg-white border-t border-[var(--color-border)]">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
+            <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
+              <div>
+                <div className="text-[11px] uppercase tracking-widest text-[var(--color-primary)] font-bold mb-1">
+                  · Kabar Resmi
+                </div>
+                <h2 className="font-serif text-2xl sm:text-3xl font-bold">
+                  Berita Kecamatan
+                </h2>
+                <p className="text-sm text-[var(--color-muted-foreground)] mt-1">
+                  Berita, pengumuman, dan kegiatan resmi dari Kecamatan Banjarmangu
+                </p>
+              </div>
+              <Link
+                href="/berita"
+                className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--color-primary)] hover:underline"
+              >
+                Lihat semua berita
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {beritaKecamatan.map((b) => (
+                <BeritaCard key={b.id} berita={b} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* =============== DAFTAR DESA =============== */}
       <section className="bg-white border-t border-[var(--color-border)]">

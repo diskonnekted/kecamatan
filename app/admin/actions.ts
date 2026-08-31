@@ -14,7 +14,8 @@ import {
 } from "@/lib/auth";
 import { syncDesa, syncAllDesa } from "@/lib/sync";
 import { scrapeAllStatistik } from "@/lib/statistik";
-import { STATUS_ADUAN } from "@/lib/queries";
+import { STATUS_ADUAN, getBeritaById, getBeritaFotos, slugifyBerita } from "@/lib/queries";
+import { saveUploadedImage, deleteUploadedImage } from "@/lib/upload";
 import type { Desa } from "@/lib/db";
 
 export async function loginAction(formData: FormData) {
@@ -465,4 +466,200 @@ export async function deleteAduanAction(formData: FormData) {
   db.prepare("DELETE FROM aduan WHERE id = ?").run(id);
   revalidatePath("/admin/aduan");
   redirect(`/admin/aduan?message=${encodeURIComponent(`Aduan #${id} dihapus`)}`);
+}
+
+/* ====================== BERITA KECAMATAN ====================== */
+
+// Pastikan slug unik (tambahkan -2, -3, dst bila sudah dipakai)
+function uniqueBeritaSlug(base: string, excludeId = 0): string {
+  let slug = base || "berita";
+  let n = 1;
+  while (true) {
+    const row = db
+      .prepare("SELECT id FROM artikel_kecamatan WHERE slug = ? AND id != ?")
+      .get(slug, excludeId) as { id: number } | undefined;
+    if (!row) return slug;
+    n += 1;
+    slug = `${base}-${n}`;
+  }
+}
+
+// Ambil gambar utama: prioritas upload file, fallback URL teks
+async function resolveGambarUtama(formData: FormData): Promise<{ value: string | null; error?: string }> {
+  const file = formData.get("gambar_file");
+  if (file instanceof File && file.size > 0) {
+    const res = await saveUploadedImage(file);
+    if (!res.ok) return { value: null, error: res.error };
+    return { value: res.url };
+  }
+  const url = String(formData.get("gambar_url") ?? "").trim();
+  return { value: url || null };
+}
+
+// Simpan foto tambahan (upload multi + URL per baris) ke galeri artikel
+async function simpanFotoTambahan(artikelId: number, formData: FormData): Promise<string | null> {
+  const maxUrutan = (
+    db.prepare("SELECT COALESCE(MAX(urutan), 0) AS m FROM artikel_kecamatan_foto WHERE artikel_id = ?").get(artikelId) as { m: number }
+  ).m;
+  let urutan = maxUrutan;
+  const insert = db.prepare("INSERT INTO artikel_kecamatan_foto (artikel_id, url, caption, urutan) VALUES (?, ?, ?, ?)");
+
+  for (const entry of formData.getAll("foto_files")) {
+    if (entry instanceof File && entry.size > 0) {
+      const res = await saveUploadedImage(entry);
+      if (!res.ok) return res.error;
+      urutan += 1;
+      insert.run(artikelId, res.url, null, urutan);
+    }
+  }
+
+  const urls = String(formData.get("foto_urls") ?? "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const url of urls) {
+    urutan += 1;
+    insert.run(artikelId, url, null, urutan);
+  }
+  return null;
+}
+
+export async function createBeritaAction(formData: FormData) {
+  const judul = String(formData.get("judul") ?? "").trim();
+  const ringkasan = String(formData.get("ringkasan") ?? "").trim() || null;
+  const konten = String(formData.get("konten") ?? "").trim() || null;
+  const penulis = String(formData.get("penulis") ?? "").trim() || null;
+  const kategori = String(formData.get("kategori") ?? "").trim() || null;
+  const is_published = formData.get("is_published") ? 1 : 0;
+
+  if (!judul) {
+    redirect(`/admin/berita?error=${encodeURIComponent("Judul wajib diisi")}`);
+  }
+
+  const gambar = await resolveGambarUtama(formData);
+  if (gambar.error) {
+    redirect(`/admin/berita?error=${encodeURIComponent(gambar.error)}`);
+  }
+
+  const slug = uniqueBeritaSlug(slugifyBerita(judul));
+  const res = db
+    .prepare(
+      `INSERT INTO artikel_kecamatan (judul, slug, ringkasan, konten, gambar_utama, penulis, kategori, is_published)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(judul, slug, ringkasan, konten, gambar.value, penulis, kategori, is_published);
+  const id = Number(res.lastInsertRowid);
+
+  const fotoError = await simpanFotoTambahan(id, formData);
+  if (fotoError) {
+    revalidatePath("/admin/berita");
+    redirect(`/admin/berita?error=${encodeURIComponent(`Berita tersimpan, tapi foto gagal diupload: ${fotoError}`)}`);
+  }
+
+  revalidatePath("/");
+  revalidatePath("/berita");
+  revalidatePath("/admin/berita");
+  redirect(`/admin/berita?message=${encodeURIComponent(`Berita "${judul}" berhasil ditambahkan`)}`);
+}
+
+export async function updateBeritaAction(formData: FormData) {
+  const id = parseInt(String(formData.get("id") ?? "0"), 10);
+  if (!id) {
+    redirect(`/admin/berita?error=${encodeURIComponent("ID tidak valid")}`);
+  }
+  const existing = getBeritaById(id);
+  if (!existing) {
+    redirect(`/admin/berita?error=${encodeURIComponent("Berita tidak ditemukan")}`);
+  }
+
+  const judul = String(formData.get("judul") ?? "").trim();
+  const ringkasan = String(formData.get("ringkasan") ?? "").trim() || null;
+  const konten = String(formData.get("konten") ?? "").trim() || null;
+  const penulis = String(formData.get("penulis") ?? "").trim() || null;
+  const kategori = String(formData.get("kategori") ?? "").trim() || null;
+  const is_published = formData.get("is_published") ? 1 : 0;
+
+  if (!judul) {
+    redirect(`/admin/berita?edit=${id}&error=${encodeURIComponent("Judul wajib diisi")}`);
+  }
+
+  const gambar = await resolveGambarUtama(formData);
+  if (gambar.error) {
+    redirect(`/admin/berita?edit=${id}&error=${encodeURIComponent(gambar.error)}`);
+  }
+  // Kalau tidak ada input gambar baru, pertahankan yang lama
+  const gambarUtama = gambar.value ?? (formData.get("hapus_gambar") ? null : existing.gambar_utama);
+
+  // Slug berubah hanya kalau judul berubah
+  const slug = judul !== existing.judul ? uniqueBeritaSlug(slugifyBerita(judul), id) : existing.slug;
+
+  db.prepare(
+    `UPDATE artikel_kecamatan SET
+      judul = ?, slug = ?, ringkasan = ?, konten = ?, gambar_utama = ?,
+      penulis = ?, kategori = ?, is_published = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+  ).run(judul, slug, ringkasan, konten, gambarUtama, penulis, kategori, is_published, id);
+
+  // Hapus file lama kalau gambar utama diganti/dihapus
+  if (existing.gambar_utama && existing.gambar_utama !== gambarUtama) {
+    deleteUploadedImage(existing.gambar_utama);
+  }
+
+  const fotoError = await simpanFotoTambahan(id, formData);
+
+  revalidatePath("/");
+  revalidatePath("/berita");
+  revalidatePath(`/berita/${slug}`);
+  revalidatePath("/admin/berita");
+  if (fotoError) {
+    redirect(`/admin/berita?edit=${id}&error=${encodeURIComponent(`Berita diperbarui, tapi foto gagal diupload: ${fotoError}`)}`);
+  }
+  redirect(`/admin/berita?message=${encodeURIComponent(`Berita "${judul}" berhasil diperbarui`)}`);
+}
+
+export async function deleteBeritaAction(formData: FormData) {
+  const id = parseInt(String(formData.get("id") ?? "0"), 10);
+  if (!id) {
+    redirect(`/admin/berita?error=${encodeURIComponent("ID tidak valid")}`);
+  }
+  const row = getBeritaById(id);
+  const fotos = row ? getBeritaFotos(id) : [];
+  db.prepare("DELETE FROM artikel_kecamatan WHERE id = ?").run(id);
+  // Bersihkan file lokal (foto rows terhapus via ON DELETE CASCADE)
+  if (row?.gambar_utama) deleteUploadedImage(row.gambar_utama);
+  for (const f of fotos) deleteUploadedImage(f.url);
+
+  revalidatePath("/");
+  revalidatePath("/berita");
+  revalidatePath("/admin/berita");
+  redirect(`/admin/berita?message=${encodeURIComponent(`Berita "${row?.judul ?? ""}" berhasil dihapus`)}`);
+}
+
+export async function togglePublishBeritaAction(formData: FormData) {
+  const id = parseInt(String(formData.get("id") ?? "0"), 10);
+  if (!id) {
+    redirect(`/admin/berita?error=${encodeURIComponent("ID tidak valid")}`);
+  }
+  db.prepare("UPDATE artikel_kecamatan SET is_published = 1 - is_published, updated_at = datetime('now') WHERE id = ?").run(id);
+  revalidatePath("/");
+  revalidatePath("/berita");
+  revalidatePath("/admin/berita");
+  redirect(`/admin/berita?message=${encodeURIComponent("Status publikasi berita diperbarui")}`);
+}
+
+export async function deleteBeritaFotoAction(formData: FormData) {
+  const id = parseInt(String(formData.get("id") ?? "0"), 10);
+  const artikelId = parseInt(String(formData.get("artikel_id") ?? "0"), 10);
+  if (!id || !artikelId) {
+    redirect(`/admin/berita?error=${encodeURIComponent("ID tidak valid")}`);
+  }
+  const foto = db.prepare("SELECT url FROM artikel_kecamatan_foto WHERE id = ? AND artikel_id = ?").get(id, artikelId) as
+    | { url: string }
+    | undefined;
+  db.prepare("DELETE FROM artikel_kecamatan_foto WHERE id = ?").run(id);
+  if (foto) deleteUploadedImage(foto.url);
+
+  revalidatePath("/berita");
+  revalidatePath("/admin/berita");
+  redirect(`/admin/berita?edit=${artikelId}&message=${encodeURIComponent("Foto galeri dihapus")}`);
 }
