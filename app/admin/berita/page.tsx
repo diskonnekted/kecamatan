@@ -10,6 +10,7 @@ import {
   togglePublishBeritaAction,
   deleteBeritaFotoAction,
 } from "../actions";
+import { ConfirmSubmitButton } from "../confirm-button";
 
 export const dynamic = "force-dynamic";
 
@@ -292,16 +293,13 @@ export default async function AdminBeritaPage({
                 <form action={deleteBeritaFotoAction} className="absolute -top-2 -right-2">
                   <input type="hidden" name="id" value={f.id} />
                   <input type="hidden" name="artikel_id" value={editItem.id} />
-                  <button
-                    type="submit"
+                  <ConfirmSubmitButton
+                    confirmMessage="Hapus foto ini?"
                     title="Hapus foto"
                     className="w-5 h-5 rounded-full bg-[var(--color-destructive)] text-white text-[10px] font-bold leading-none flex items-center justify-center"
-                    onClick={(e) => {
-                      if (!confirm("Hapus foto ini?")) e.preventDefault();
-                    }}
                   >
                     ×
-                  </button>
+                  </ConfirmSubmitButton>
                 </form>
               </div>
             ))}
@@ -380,15 +378,12 @@ export default async function AdminBeritaPage({
                   </form>
                   <form action={deleteBeritaAction}>
                     <input type="hidden" name="id" value={b.id} />
-                    <button
-                      type="submit"
+                    <ConfirmSubmitButton
+                      confirmMessage={`Hapus berita "${b.judul}"?`}
                       className="px-3 py-1.5 rounded-md border border-[var(--color-border)] hover:border-[var(--color-destructive)] hover:text-[var(--color-destructive)] text-xs font-semibold transition-colors"
-                      onClick={(e) => {
-                        if (!confirm(`Hapus berita "${b.judul}"?`)) e.preventDefault();
-                      }}
                     >
                       Hapus
-                    </button>
+                    </ConfirmSubmitButton>
                   </form>
                 </div>
               </div>

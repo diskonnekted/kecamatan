@@ -9,6 +9,7 @@ import {
   deleteUnduhanAction,
   togglePublishUnduhanAction,
 } from "../actions";
+import { ConfirmSubmitButton } from "../confirm-button";
 import type { Unduhan } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -311,15 +312,12 @@ export default async function AdminUnduhanPage({
                       </form>
                       <form action={deleteUnduhanAction}>
                         <input type="hidden" name="id" value={u.id} />
-                        <button
-                          type="submit"
+                        <ConfirmSubmitButton
+                          confirmMessage={`Hapus dokumen "${u.judul}"?`}
                           className="px-3 py-1.5 rounded-md border border-[var(--color-border)] hover:border-[var(--color-destructive)] hover:text-[var(--color-destructive)] text-xs font-semibold transition-colors"
-                          onClick={(e) => {
-                            if (!confirm(`Hapus dokumen "${u.judul}"?`)) e.preventDefault();
-                          }}
                         >
                           Hapus
-                        </button>
+                        </ConfirmSubmitButton>
                       </form>
                     </div>
                   </div>
