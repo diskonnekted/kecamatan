@@ -776,6 +776,9 @@ function trimBeforeTitleHeading(
   }
 }
 
+// URL gambar valid: harus berakhiran ekstensi gambar (menyaring src terpotong dari situs sumber)
+const IMG_SRC_RX = /\.(jpe?g|png|gif|webp|svg|bmp|avif)(\?|#|$)/i;
+
 /** Ambil konten utama halaman profil & bersihkan agar aman ditampilkan di portal. */
 function sanitizeProfilHtml(html: string, pageUrl: string, judulCandidates: string[] = []): string {
   const $ = cheerio.load(html);
@@ -840,7 +843,7 @@ function sanitizeProfilHtml(html: string, pageUrl: string, judulCandidates: stri
     const $img = $(el);
     const src = $img.attr('src') || $img.attr('data-src') || $img.attr('data-lazy-src') || '';
     const abs = src ? absolutizeUrl(src, pageUrl) : '';
-    if (!abs || !/\.(jpe?g|png|gif|webp|svg|bmp|avif)(\?|#|$)/i.test(abs)) {
+    if (!abs || !IMG_SRC_RX.test(abs)) {
       $img.remove();
       return;
     }
@@ -918,7 +921,10 @@ export async function fetchProfilDesa(desa: Desa): Promise<string> {
         continue;
       }
       const ogImg = $('meta[property="og:image"]').attr('content')?.trim() || null;
-      upsertProfil(desa.id, t.jenis, judul, konten.slice(0, MAX_PROFIL_HTML), ogImg ? absolutizeUrl(ogImg, t.url) : null, t.url);
+      const ogAbs = ogImg ? absolutizeUrl(ogImg, t.url) : null;
+      // og:image dari situs sumber kadang terpotong/rusak — abaikan jika bukan URL gambar valid
+      const gambar = ogAbs && IMG_SRC_RX.test(ogAbs) ? ogAbs : null;
+      upsertProfil(desa.id, t.jenis, judul, konten.slice(0, MAX_PROFIL_HTML), gambar, t.url);
       saved++;
       await new Promise((r) => setTimeout(r, 400));
     } catch {
