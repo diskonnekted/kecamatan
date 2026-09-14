@@ -36,7 +36,7 @@ function AparaturGrid({ perangkat }: { perangkat: PerangkatDesa[] }) {
         </span>
         <div>
           <h2 className="text-xl font-bold text-[var(--color-foreground)]">Aparatur Desa</h2>
-          <p className="text-sm text-[var(--color-muted)]">{perangkat.length} perangkat desa</p>
+          <p className="text-sm text-[var(--color-muted-foreground)]">{perangkat.length} perangkat desa</p>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -53,13 +53,13 @@ function AparaturGrid({ perangkat }: { perangkat: PerangkatDesa[] }) {
                 className="aspect-[3/4] w-full object-cover object-top"
               />
             ) : (
-              <div className="flex aspect-[3/4] w-full items-center justify-center bg-[var(--color-primary)]/5 text-[var(--color-muted)]">
+              <div className="flex aspect-[3/4] w-full items-center justify-center bg-[var(--color-primary)]/5 text-[var(--color-muted-foreground)]">
                 <UserIcon className="h-16 w-16" />
               </div>
             )}
             <div className="p-3 text-center">
               <p className="text-sm font-semibold leading-snug text-[var(--color-foreground)]">{p.nama}</p>
-              {p.jabatan && <p className="mt-0.5 text-xs text-[var(--color-muted)]">{p.jabatan}</p>}
+              {p.jabatan && <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">{p.jabatan}</p>}
             </div>
           </div>
         ))}
@@ -110,7 +110,7 @@ function DesaProfilSection({
             </span>
             <div>
               <h2 className="text-xl font-bold text-[var(--color-foreground)]">Profil &amp; Pemerintahan Desa</h2>
-              <p className="text-sm text-[var(--color-muted)]">
+              <p className="text-sm text-[var(--color-muted-foreground)]">
                 Disalin otomatis dari situs resmi desa
               </p>
             </div>
@@ -130,12 +130,12 @@ function DesaProfilSection({
                       <span className="inline-flex items-center rounded-full bg-[var(--color-primary)]/10 px-3 py-1 text-xs font-semibold text-[var(--color-primary)]">
                         {PROFIL_JENIS_LABEL[jenis] ?? jenis}
                       </span>
-                      <span className="text-sm text-[var(--color-muted)]">
+                      <span className="text-sm text-[var(--color-muted-foreground)]">
                         {list.length} halaman
                       </span>
                     </span>
                     <svg
-                      className="h-4 w-4 shrink-0 text-[var(--color-muted)] transition-transform duration-200 group-open:rotate-180"
+                      className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)] transition-transform duration-200 group-open:rotate-180"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -164,7 +164,7 @@ function DesaProfilSection({
                             dangerouslySetInnerHTML={{ __html: p.konten_html }}
                           />
                         ) : (
-                          <p className="text-sm text-[var(--color-muted)]">
+                          <p className="text-sm text-[var(--color-muted-foreground)]">
                             Konten tidak tersedia.{' '}
                             <a
                               href={p.source_url}
@@ -176,7 +176,7 @@ function DesaProfilSection({
                             </a>
                           </p>
                         )}
-                        <p className="mt-3 text-xs text-[var(--color-muted)]">
+                        <p className="mt-3 text-xs text-[var(--color-muted-foreground)]">
                           Sumber:{' '}
                           <a
                             href={p.source_url}
