@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import {
   createSession,
   destroySession,
+  getCurrentUser,
   hashPassword,
   verifyPassword,
   SESSION_COOKIE,
@@ -662,4 +663,47 @@ export async function deleteBeritaFotoAction(formData: FormData) {
   revalidatePath("/berita");
   revalidatePath("/admin/berita");
   redirect(`/admin/berita?edit=${artikelId}&message=${encodeURIComponent("Foto galeri dihapus")}`);
+}
+
+// ===== Kelola artikel hasil sinkron (per desa) =====
+export async function deleteArtikelDesaAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/admin/login");
+
+  const artikelId = Number(formData.get("artikel_id") ?? 0);
+  const desaId = Number(formData.get("desa_id") ?? 0);
+  const q = String(formData.get("q") ?? "").trim();
+  const page = Math.max(1, Number(formData.get("page") ?? 1) || 1);
+  if (!artikelId || !desaId) redirect("/admin/desa");
+
+  // Susun URL kembali ke halaman kelola (pertahankan pencarian & halaman)
+  const backParams = new URLSearchParams();
+  if (q) backParams.set("q", q);
+  if (page > 1) backParams.set("page", String(page));
+  const backQs = backParams.toString();
+  const back = `/admin/desa/${desaId}${backQs ? `?${backQs}` : ""}`;
+  const withMsg = (key: "message" | "error", msg: string) =>
+    `${back}${backQs ? "&" : "?"}${key}=${encodeURIComponent(msg)}`;
+
+  // Pastikan artikel memang milik desa ini
+  const artikel = db
+    .prepare(
+      `SELECT a.judul, a.slug, d.slug AS desa_slug
+       FROM artikel a JOIN desa d ON d.id = a.desa_id
+       WHERE a.id = ? AND a.desa_id = ?`,
+    )
+    .get(artikelId, desaId) as { judul: string; slug: string; desa_slug: string } | undefined;
+
+  if (!artikel) {
+    redirect(withMsg("error", "Artikel tidak ditemukan untuk desa ini"));
+  }
+
+  db.prepare("DELETE FROM artikel WHERE id = ? AND desa_id = ?").run(artikelId, desaId);
+
+  revalidatePath("/");
+  revalidatePath("/artikel");
+  revalidatePath(`/desa/${artikel.desa_slug}`);
+  revalidatePath(`/artikel/${artikel.desa_slug}/${artikel.slug}`);
+
+  redirect(withMsg("message", `Artikel "${artikel.judul}" berhasil dihapus dari portal`));
 }

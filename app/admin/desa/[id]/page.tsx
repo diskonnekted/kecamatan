@@ -1,8 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { db, type Desa } from "@/lib/db";
-import { getApiKeyByDesaId } from "@/lib/queries";
-import { generateApiKeyAction, revokeApiKeyAction, reactivateApiKeyAction, deleteApiKeyAction, updateDesaAction, triggerSyncAction } from "../../actions";
+import { getApiKeyByDesaId, getArtikelByDesaAdmin } from "@/lib/queries";
+import { generateApiKeyAction, revokeApiKeyAction, reactivateApiKeyAction, deleteApiKeyAction, updateDesaAction, triggerSyncAction, deleteArtikelDesaAction } from "../../actions";
+import { ConfirmSubmitButton } from "../../confirm-button";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -12,7 +13,7 @@ const PUSH_URL =
     ? `${process.env.NEXT_PUBLIC_PORTAL_URL.replace(/\/$/, "")}/api/push/artikel`
     : "https://kecamatan-banjarmangu.example.com/api/push/artikel";
 
-type Search = Promise<{ message?: string; error?: string; newkey?: string }>;
+type Search = Promise<{ message?: string; error?: string; newkey?: string; q?: string; page?: string }>;
 
 export default async function AdminDesaDetailPage(props: { params: Promise<{ id: string }>; searchParams: Search }) {
   const user = await getCurrentUser();
@@ -29,6 +30,13 @@ export default async function AdminDesaDetailPage(props: { params: Promise<{ id:
   const apiKey = getApiKeyByDesaId(desaId);
   // Tampilkan key baru hanya sekali (lewat query param), supaya admin bisa copy
   const justCreatedKey = searchParams.newkey || null;
+
+  // Data untuk bagian Kelola Artikel (hasil sinkron)
+  const q = (searchParams.q ?? "").trim();
+  const artikelPage = getArtikelByDesaAdmin(desaId, {
+    q,
+    page: Math.max(1, parseInt(searchParams.page ?? "1", 10) || 1),
+  });
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 px-4 py-8 sm:px-6 lg:px-10">
@@ -274,7 +282,152 @@ Interval     : setiap 6 jam (atau sesuai kebutuhan)`}
             </button>
           </form>
         </section>
+
+        {/* === KELOLA ARTIKEL HASIL SINKRON === */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">📰 Kelola Artikel Hasil Sinkron</h2>
+              <p className="mt-1 max-w-2xl text-sm text-slate-600">
+                {artikelPage.total} artikel tersimpan dari desa ini. Menghapus artikel di sini hanya
+                menghapusnya dari portal kecamatan — artikel tidak akan muncul kembali selama sudah
+                dihapus juga di situs desa sumber.
+              </p>
+            </div>
+            <form method="get" className="flex items-center gap-2">
+              <input
+                type="text"
+                name="q"
+                defaultValue={q}
+                placeholder="Cari judul artikel…"
+                className="w-56 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+              />
+              <button
+                type="submit"
+                className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
+              >
+                Cari
+              </button>
+              {q && (
+                <a
+                  href={`/admin/desa/${desa.id}`}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+                >
+                  Reset
+                </a>
+              )}
+            </form>
+          </div>
+
+          {artikelPage.items.length === 0 ? (
+            <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+              {q ? `Tidak ada artikel yang cocok dengan "${q}".` : "Belum ada artikel tersinkron untuk desa ini."}
+            </p>
+          ) : (
+            <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-4 py-2.5">Judul</th>
+                    <th className="whitespace-nowrap px-4 py-2.5">Tanggal</th>
+                    <th className="px-4 py-2.5">Sumber</th>
+                    <th className="px-4 py-2.5 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {artikelPage.items.map((a) => (
+                    <tr key={a.id} className="hover:bg-slate-50/60">
+                      <td className="max-w-md px-4 py-2.5">
+                        <a
+                          href={`/artikel/${desa.slug}/${a.slug}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="line-clamp-2 font-medium text-slate-900 hover:text-blue-700"
+                        >
+                          {a.judul}
+                        </a>
+                        {a.url && (
+                          <a
+                            href={a.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-0.5 block text-xs text-slate-400 hover:underline"
+                          >
+                            sumber asli ↗
+                          </a>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-slate-600">
+                        {formatTanggal(a.published_at)}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                          {a.source}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <form action={deleteArtikelDesaAction}>
+                          <input type="hidden" name="artikel_id" value={a.id} />
+                          <input type="hidden" name="desa_id" value={desa.id} />
+                          <input type="hidden" name="q" value={q} />
+                          <input type="hidden" name="page" value={artikelPage.page} />
+                          <ConfirmSubmitButton
+                            confirmMessage={`Hapus artikel "${a.judul}" dari portal kecamatan?\n\nArtikel tidak akan muncul kembali selama sudah dihapus juga di situs desa.`}
+                            className="rounded-md border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                          >
+                            Hapus
+                          </ConfirmSubmitButton>
+                        </form>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {artikelPage.totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between text-sm">
+              <p className="text-slate-500">
+                Halaman {artikelPage.page} dari {artikelPage.totalPages}
+              </p>
+              <div className="flex gap-2">
+                {artikelPage.page > 1 && (
+                  <a
+                    href={`/admin/desa/${desa.id}${artikelQuery(q, artikelPage.page - 1)}`}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-600 hover:bg-slate-50"
+                  >
+                    ← Sebelumnya
+                  </a>
+                )}
+                {artikelPage.page < artikelPage.totalPages && (
+                  <a
+                    href={`/admin/desa/${desa.id}${artikelQuery(q, artikelPage.page + 1)}`}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-600 hover:bg-slate-50"
+                  >
+                    Berikutnya →
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );
+}
+
+function artikelQuery(q: string, page: number): string {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (page > 1) params.set("page", String(page));
+  const s = params.toString();
+  return s ? `?${s}` : "";
+}
+
+function formatTanggal(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
 }

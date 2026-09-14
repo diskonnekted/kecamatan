@@ -415,3 +415,37 @@ export function getBeritaLainnya(excludeId: number, limit = 4): ArtikelKecamatan
 export function incrementBeritaView(id: number) {
   db.prepare('UPDATE artikel_kecamatan SET view_count = view_count + 1 WHERE id = ?').run(id);
 }
+
+// ===== Admin: kelola artikel hasil sinkron per desa (dengan pencarian + paginasi) =====
+export type AdminArtikelPage = {
+  items: Artikel[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export function getArtikelByDesaAdmin(
+  desaId: number,
+  opts: { q?: string; page?: number; pageSize?: number } = {},
+): AdminArtikelPage {
+  const q = (opts.q ?? '').trim().toLowerCase();
+  const pageSize = Math.max(1, opts.pageSize ?? 25);
+
+  const where = ['desa_id = ?'];
+  const params: (string | number)[] = [desaId];
+  if (q) {
+    where.push('(LOWER(judul) LIKE ? OR LOWER(slug) LIKE ?)');
+    params.push(`%${q}%`, `%${q}%`);
+  }
+  const whereSql = where.join(' AND ');
+
+  const total = (db.prepare(`SELECT COUNT(*) AS c FROM artikel WHERE ${whereSql}`).get(...params) as { c: number }).c;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(Math.max(1, opts.page ?? 1), totalPages);
+  const items = db
+    .prepare(`SELECT * FROM artikel WHERE ${whereSql} ORDER BY published_at DESC, id DESC LIMIT ? OFFSET ?`)
+    .all(...params, pageSize, (page - 1) * pageSize) as Artikel[];
+
+  return { items, total, page, pageSize, totalPages };
+}
