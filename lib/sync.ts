@@ -904,33 +904,66 @@ export function detectAparatur(html: string, pageUrl: string): AparaturEntry[] {
   const $ = cheerio.load(html);
   const out: AparaturEntry[] = [];
   const seen = new Set<string>();
-  $('a[data-caption]').each((_i, el) => {
-    const $a = $(el);
-    const cap = ($a.attr('data-caption') || '').trim();
-    if (!cap) return;
-    const $img = $a.find('img').first();
-    const imgSrc = $img.attr('src') || $img.attr('data-src') || $a.attr('href') || '';
-    const foto = imgSrc ? absolutizeUrl(imgSrc, pageUrl) : null;
-    // hanya kartu yang menunjuk foto aparatur (user_pict/pamong) dengan URL gambar valid
-    if (!foto || !/user_pict|pamong/i.test(foto) || !IMG_SRC_RX.test(foto)) return;
-    const parts = cap
-      .split(/<br\s*\/?>/i)
-      .map((p) => decodeEntities(p.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim())
-      .filter(Boolean);
-    let jabatan = '';
-    let nama = '';
-    if (parts.length >= 2) {
-      jabatan = parts[0];
-      nama = parts.slice(1).join(' ');
-    } else {
-      nama = parts[0] || '';
-    }
+
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
+  const push = (namaRaw: string, jabatanRaw: string, foto: string | null) => {
+    const nama = norm(namaRaw);
+    const jabatan = norm(jabatanRaw);
     if (nama.length < 3) return;
     const key = `${jabatan}|${nama}`.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
     out.push({ nama, jabatan, foto });
+  };
+  /** URL foto valid; placeholder tema (kuser dsb) -> null */
+  const validFoto = (src: string | undefined): string | null => {
+    if (!src) return null;
+    const abs = absolutizeUrl(src, pageUrl);
+    if (!abs || !IMG_SRC_RX.test(abs)) return null;
+    if (/kuser|placeholder|default|no-?image/i.test(abs)) return null;
+    return abs;
+  };
+
+  // Pola A — carousel tema (gripit, sijeruk): <a data-caption="Jabatan<br/>Nama"><img user_pict></a>
+  $('a[data-caption]').each((_i, el) => {
+    const $a = $(el);
+    const cap = ($a.attr('data-caption') || '').trim();
+    if (!cap) return;
+    const $img = $a.find('img').first();
+    const foto = validFoto($img.attr('src') || $img.attr('data-src') || $a.attr('href'));
+    if (!foto || !/user_pict|pamong/i.test(foto)) return;
+    const parts = cap
+      .split(/<br\s*\/?>/i)
+      .map((p) => norm(decodeEntities(p.replace(/<[^>]+>/g, ' '))))
+      .filter(Boolean);
+    if (parts.length >= 2) push(parts.slice(1).join(' '), parts[0], foto);
+    else if (parts.length === 1) push(parts[0], '', foto);
   });
+
+  // Pola B — widget slide (banjarmangu, kalilunjar, sigeblog): .aparatur-widget-slide = img + h4(nama) + p(jabatan)
+  $('.aparatur-widget-slide').each((_i, el) => {
+    const $el = $(el);
+    const $img = $el.find('img').first();
+    const src = $img.attr('src') || '';
+    if (!/user_pict|pamong|kuser|pengguna/i.test(src)) return;
+    const nama = norm($el.find('h4').first().text()) || norm($img.attr('alt') || '');
+    const jabatan =
+      norm($el.find('h4').first().nextAll('p').first().text()) || norm($el.find('p').first().text());
+    push(nama, jabatan, validFoto(src));
+  });
+
+  // Pola C — widget team-scroll (beji, kendaga, dll): .card = img + h3(nama) + p(jabatan)
+  $('#teamScroll .card, .team-scroll .card, .team-container-wrapper .card').each((_i, el) => {
+    const $el = $(el);
+    const $img = $el.find('img').first();
+    const src = $img.attr('src') || '';
+    if (!/user_pict|pamong|kuser|pengguna/i.test(src)) return;
+    const nama = norm($el.find('h3').first().text()) || norm($img.attr('alt') || '');
+    const jabatan =
+      norm($el.find('h3').first().nextAll('p').first().text()) || norm($el.find('p').first().text());
+    push(nama, jabatan, validFoto(src));
+  });
+
   return out.slice(0, 40);
 }
 
@@ -971,6 +1004,10 @@ export async function fetchProfilDesa(desa: Desa): Promise<string> {
   let spam = 0;
   let gagal = 0;
   const perangkatMap = new Map<string, AparaturEntry>();
+  // aparatur juga dideteksi dari homepage — widget tema (pola B/C) sering hanya tampil di sana
+  for (const a of detectAparatur(home, desa.website)) {
+    perangkatMap.set(`${a.jabatan}|${a.nama}`.toLowerCase(), a);
+  }
   for (const t of targets) {
     try {
       const html = await fetchText(t.url, 30_000);
