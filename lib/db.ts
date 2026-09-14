@@ -170,6 +170,21 @@ function ensureSchemaSync(db: Database.Database) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_profil_desa_desa ON profil_desa(desa_id);`);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS perangkat_desa (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      desa_id INTEGER NOT NULL,
+      nama TEXT NOT NULL,
+      jabatan TEXT NOT NULL DEFAULT '',
+      foto_url TEXT,
+      urutan INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (desa_id, nama, jabatan),
+      FOREIGN KEY (desa_id) REFERENCES desa(id) ON DELETE CASCADE
+    );
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_perangkat_desa_desa ON perangkat_desa(desa_id);`);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS profil_kecamatan (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nama_kecamatan TEXT NOT NULL DEFAULT 'Banjarmangu',
@@ -348,6 +363,16 @@ export type ProfilDesa = {
   gambar: string | null;
   source_url: string;
   fetched_at: string;
+};
+
+export type PerangkatDesa = {
+  id: number;
+  desa_id: number;
+  nama: string;
+  jabatan: string;
+  foto_url: string | null;
+  urutan: number;
+  updated_at: string;
 };
 
 export type Artikel = {

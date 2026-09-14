@@ -881,6 +881,70 @@ function upsertProfil(
  * Memakai mesin fetch yang sama seperti berita (fetchText: rotasi UA + retry).
  * Mengembalikan ringkasan untuk digabung ke pesan sync artikel.
  */
+export type AparaturEntry = { nama: string; jabatan: string; foto: string | null };
+
+/** Decode entitas HTML umum (dipakai untuk data-caption dsb). */
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ');
+}
+
+/**
+ * Deteksi kartu aparatur/perangkat desa pada halaman OpenSID.
+ * Tema OpenSID menampilkan carousel aparatur berbentuk:
+ *   <a href="foto" data-caption="Jabatan<br/>Nama"><img .../user_pict/...></a>
+ * Mengembalikan daftar unik (urutan sesuai kemunculan pertama di dokumen).
+ */
+export function detectAparatur(html: string, pageUrl: string): AparaturEntry[] {
+  const $ = cheerio.load(html);
+  const out: AparaturEntry[] = [];
+  const seen = new Set<string>();
+  $('a[data-caption]').each((_i, el) => {
+    const $a = $(el);
+    const cap = ($a.attr('data-caption') || '').trim();
+    if (!cap) return;
+    const $img = $a.find('img').first();
+    const imgSrc = $img.attr('src') || $img.attr('data-src') || $a.attr('href') || '';
+    const foto = imgSrc ? absolutizeUrl(imgSrc, pageUrl) : null;
+    // hanya kartu yang menunjuk foto aparatur (user_pict/pamong) dengan URL gambar valid
+    if (!foto || !/user_pict|pamong/i.test(foto) || !IMG_SRC_RX.test(foto)) return;
+    const parts = cap
+      .split(/<br\s*\/?>/i)
+      .map((p) => decodeEntities(p.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+    let jabatan = '';
+    let nama = '';
+    if (parts.length >= 2) {
+      jabatan = parts[0];
+      nama = parts.slice(1).join(' ');
+    } else {
+      nama = parts[0] || '';
+    }
+    if (nama.length < 3) return;
+    const key = `${jabatan}|${nama}`.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ nama, jabatan, foto });
+  });
+  return out.slice(0, 40);
+}
+
+/** Ganti seluruh data perangkat desa dengan hasil deteksi terbaru. */
+function replacePerangkatDesa(desaId: number, rows: AparaturEntry[]): void {
+  db.prepare('DELETE FROM perangkat_desa WHERE desa_id = ?').run(desaId);
+  const ins = db.prepare(
+    'INSERT INTO perangkat_desa (desa_id, nama, jabatan, foto_url, urutan) VALUES (?, ?, ?, ?, ?)',
+  );
+  rows.forEach((r, i) => {
+    ins.run(desaId, r.nama.slice(0, 200), r.jabatan.slice(0, 200), r.foto, i);
+  });
+}
+
 export async function fetchProfilDesa(desa: Desa): Promise<string> {
   // 1. Homepage → deteksi tautan profil dari menu
   const home = await fetchText(desa.website, 30_000);
@@ -906,12 +970,18 @@ export async function fetchProfilDesa(desa: Desa): Promise<string> {
   let saved = 0;
   let spam = 0;
   let gagal = 0;
+  const perangkatMap = new Map<string, AparaturEntry>();
   for (const t of targets) {
     try {
       const html = await fetchText(t.url, 30_000);
       if (PROFIL_SPAM_RX.test(html)) {
         spam++;
         continue;
+      }
+      // kumpulkan kartu aparatur (bila ada) dari halaman ini
+      for (const a of detectAparatur(html, t.url)) {
+        const key = `${a.jabatan}|${a.nama}`.toLowerCase();
+        if (!perangkatMap.has(key)) perangkatMap.set(key, a);
       }
       const $ = cheerio.load(html);
       const judul = (t.judul || pickPageTitle($) || t.url).slice(0, 300);
@@ -943,7 +1013,12 @@ export async function fetchProfilDesa(desa: Desa): Promise<string> {
     );
   }
 
-  return `profil: ${saved} tersimpan${spam ? `, ${spam} spam dilewati` : ''}${gagal ? `, ${gagal} gagal` : ''}`;
+  // 4. Simpan data perangkat hasil deteksi (grid rapi menggantikan scrape mentah)
+  if (perangkatMap.size > 0) {
+    replacePerangkatDesa(desa.id, [...perangkatMap.values()]);
+  }
+
+  return `profil: ${saved} tersimpan${spam ? `, ${spam} spam dilewati` : ''}${gagal ? `, ${gagal} gagal` : ''}${perangkatMap.size ? `, ${perangkatMap.size} perangkat` : ''}`;
 }
 
 /* ====================== PUSH INGEST ====================== */

@@ -1,4 +1,4 @@
-import { db, type Desa, type Artikel, type DesaApiKey, type PushInboxEntry, type Unduhan, type Aduan, type ArtikelKecamatan, type ArtikelKecamatanFoto, type ProfilDesa } from './db';
+import { db, type Desa, type Artikel, type DesaApiKey, type PushInboxEntry, type Unduhan, type Aduan, type ArtikelKecamatan, type ArtikelKecamatanFoto, type ProfilDesa, type PerangkatDesa } from './db';
 import crypto from 'crypto';
 
 export type ArtikelWithDesa = Artikel & { desa: Pick<Desa, 'slug' | 'nama'> };
@@ -475,4 +475,10 @@ export function getProfilByDesaId(desaId: number): ProfilDesa[] {
       (PROFIL_JENIS_ORDER[a.jenis] ?? 9) - (PROFIL_JENIS_ORDER[b.jenis] ?? 9) ||
       a.judul.localeCompare(b.judul),
   );
+}
+
+export function getPerangkatByDesaId(desaId: number): PerangkatDesa[] {
+  return db
+    .prepare('SELECT * FROM perangkat_desa WHERE desa_id = ? ORDER BY urutan ASC, id ASC')
+    .all(desaId) as PerangkatDesa[];
 }
