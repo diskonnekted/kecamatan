@@ -666,6 +666,277 @@ function upsertArtikel(items: Artikel[], desaId: number): { newCount: number; up
   return { newCount, updatedCount };
 }
 
+/* ====================== PROFIL & LEMBAGA DESA ====================== */
+
+export type ProfilJenis = 'pemerintah' | 'profil' | 'sejarah' | 'visi_misi' | 'lembaga';
+
+// Urutan rule = prioritas klasifikasi (match pertama menang)
+const PROFIL_RULES: Array<{ jenis: ProfilJenis; rx: RegExp }> = [
+  { jenis: 'lembaga', rx: /lembaga|\bbpd\b|\blpm|lpmd|\bpkk\b|karang\s*taruna|posyandu|bumdes/i },
+  { jenis: 'pemerintah', rx: /pemerintah|perangkat|struktur|sotk|aparatur/i },
+  { jenis: 'sejarah', rx: /sejarah|asal[\s-]*usul/i },
+  { jenis: 'visi_misi', rx: /visi|\bmisi\b/i },
+  { jenis: 'profil', rx: /profil|wilayah|geografis|tentang|gambaran/i },
+];
+
+// Frasa spam judi online — situs desa yang diretas menyajikan doorway page
+// (kasus nyata: sijenggung, Sep 2026). Hati-hati: JANGAN pakai kata "judi"
+// sendirian — false positive pada nama orang (ada perangkat bernama "Judi").
+const PROFIL_SPAM_RX =
+  /(slot\s*gacor|slot\s*online|togel|casino\s*online|rtp\s*(slot|live)|maxwin|judi\s*online|situs\s*judi|pragmatic\s*play|depo\s*(pulsa|dana|ovo)|bonus\s*new\s*member|daftar\s*slot)/i;
+
+const MAX_PROFIL_PER_DESA = 10;
+const MAX_PROFIL_HTML = 1_500_000;
+
+type ProfilTarget = { url: string; jenis: ProfilJenis; judul: string };
+
+function classifyProfilJenis(text: string): ProfilJenis {
+  for (const r of PROFIL_RULES) if (r.rx.test(text)) return r.jenis;
+  return 'profil';
+}
+
+/** Deteksi tautan halaman profil/lembaga dari area menu homepage situs desa. */
+function detectProfilLinks(html: string, baseUrl: string): ProfilTarget[] {
+  const $ = cheerio.load(html);
+  let anchors = $(
+    'nav a[href], header a[href], .menu a[href], .navbar a[href], .main-menu a[href], #menu a[href], .nav a[href], .navigation a[href]',
+  );
+  if (anchors.length < 3) anchors = $('a[href]');
+
+  const out: ProfilTarget[] = [];
+  const seen = new Set<string>();
+  anchors.each((_i, el) => {
+    const href = ($(el).attr('href') || '').trim();
+    const label = $(el).text().replace(/\s+/g, ' ').trim();
+    if (!href || href === '#' || href.toLowerCase().startsWith('javascript:')) return;
+    const probe = `${label} ${href}`;
+    if (!PROFIL_RULES.some((r) => r.rx.test(probe))) return;
+    const abs = absolutizeUrl(href, baseUrl);
+    if (!abs || isMediaUrl(abs)) return;
+    try {
+      if (new URL(abs).hostname !== new URL(baseUrl).hostname) return;
+    } catch {
+      return;
+    }
+    const clean = abs.split('#')[0].replace(/\/+$/, '');
+    if (seen.has(clean)) return;
+    seen.add(clean);
+    out.push({ url: clean, jenis: classifyProfilJenis(probe), judul: label || clean });
+  });
+  return out.slice(0, MAX_PROFIL_PER_DESA);
+}
+
+function parseManualProfilUrls(raw: string | null | undefined): ProfilTarget[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw) as unknown;
+    if (!Array.isArray(arr)) return [];
+    const out: ProfilTarget[] = [];
+    for (const item of arr) {
+      const url = typeof item === 'string' ? item.trim() : '';
+      if (!/^https?:\/\//i.test(url)) continue;
+      out.push({ url: url.replace(/\/+$/, ''), jenis: classifyProfilJenis(url), judul: '' });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+function pickPageTitle($: cheerio.CheerioAPI): string {
+  const og = $('meta[property="og:title"]').attr('content')?.trim();
+  if (og) return og;
+  const h1 = $('h1').first().text().replace(/\s+/g, ' ').trim();
+  if (h1) return h1;
+  return $('title').text().replace(/\s+/g, ' ').trim();
+}
+
+/** Hapus semua konten sebelum heading yang memuat judul halaman (biasanya chrome tema:
+ *  marquee "selamat datang", label "ARTIKEL", dsb.). Graceful — bila tidak cocok, tidak dipotong. */
+function trimBeforeTitleHeading(
+  $: cheerio.CheerioAPI,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  root: cheerio.Cheerio<any>,
+  judulCandidates: string[],
+) {
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+  const targets = judulCandidates.map(norm).filter((s) => s.length >= 4);
+  if (targets.length === 0) return;
+  for (const el of root.find('h1, h2, h3, h4').toArray()) {
+    const t = norm($(el).text());
+    if (!targets.some((x) => t === x || (t.length > 0 && x.startsWith(t)) || t.startsWith(x))) continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let node: cheerio.Cheerio<any> = $(el);
+    while (node.length > 0 && node.get(0) !== root.get(0)) {
+      node.prevAll().remove();
+      node = node.parent();
+    }
+    $(el).remove(); // judul sudah ditampilkan oleh UI portal
+    break;
+  }
+}
+
+/** Ambil konten utama halaman profil & bersihkan agar aman ditampilkan di portal. */
+function sanitizeProfilHtml(html: string, pageUrl: string, judulCandidates: string[] = []): string {
+  const $ = cheerio.load(html);
+  $('script, style, iframe, noscript, form, button, input, select, textarea, video, audio, object, embed').remove();
+
+  const candidates = [
+    'article .entry-content', '.entry-content', '.post-content', '.article-content',
+    '.content-artikel', '.single-article', 'article', '#artikel', '.artikel',
+    'main', '#content', '.content',
+  ];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let root: cheerio.Cheerio<any> = $('body') as cheerio.Cheerio<any>;
+  for (const sel of candidates) {
+    const el = $(sel).first();
+    if (el.length && el.text().replace(/\s+/g, '').length > 200) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      root = el as cheerio.Cheerio<any>;
+      break;
+    }
+  }
+
+  root.find(
+    'nav, header, footer, aside, marquee, .breadcrumb, .breadcrumbs, .share, .sharedaddy, [class*="share"], .komentar, #comments, .comments, .comment-respond, .post-nav, .navigation, .related, .artikelmeta, .sosmed, .meta-author, .widget, [class*="widget"], .sidebar, [class*="sidebar"], [id*="sidebar"]',
+  ).remove();
+  root.find('img[src*="/widgets/"], img[src*="banner"]').remove();
+
+  // potong chrome tema sebelum heading judul, lalu buang heading judulnya
+  trimBeforeTitleHeading($, root, judulCandidates);
+  root.find('h1').first().remove();
+
+  // buang elemen kosong (beberapa pass untuk yang bersarang; whitespace dianggap kosong)
+  for (let pass = 0; pass < 4; pass++) {
+    root.find('div, span, p, section, i').each((_i, el) => {
+      const $el = $(el);
+      if ($el.text().trim() === '' && $el.find('img, table, video, iframe, hr, br').length === 0) {
+        $el.remove();
+      }
+    });
+  }
+
+  // buang atribut berbahaya/pengganggu layout
+  root.find('*').each((_i, el) => {
+    const attribs = (el as { attribs?: Record<string, string> }).attribs ?? {};
+    for (const name of Object.keys(attribs)) {
+      const n = name.toLowerCase();
+      if (n.startsWith('on') || n === 'style' || n === 'srcset' || n === 'sizes' || n === 'class' || n === 'id') {
+        $(el).removeAttr(name);
+      }
+    }
+  });
+
+  // tautan → teks biasa (hindari tautan keluar / tautan spam)
+  root.find('a').each((_i, el) => {
+    $(el).replaceWith($(el).contents());
+  });
+
+  // gambar: absolutkan src + lazy-load
+  root.find('img').each((_i, el) => {
+    const $img = $(el);
+    const src = $img.attr('src') || $img.attr('data-src') || $img.attr('data-lazy-src') || '';
+    const abs = src ? absolutizeUrl(src, pageUrl) : '';
+    if (!abs) {
+      $img.remove();
+      return;
+    }
+    $img.attr('src', abs);
+    $img.attr('loading', 'lazy');
+    $img.removeAttr('data-src').removeAttr('data-lazy-src').removeAttr('width').removeAttr('height');
+  });
+
+  // buang komentar HTML (termasuk conditional comment berisi <script>)
+  return (root.html() ?? '').replace(/<!--[\s\S]*?-->/g, '').trim();
+}
+
+function upsertProfil(
+  desaId: number,
+  jenis: ProfilJenis,
+  judul: string,
+  kontenHtml: string,
+  gambar: string | null,
+  sourceUrl: string,
+) {
+  db.prepare(
+    `INSERT INTO profil_desa (desa_id, jenis, judul, konten_html, gambar, source_url, fetched_at)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(desa_id, source_url) DO UPDATE SET
+       jenis = excluded.jenis,
+       judul = excluded.judul,
+       konten_html = excluded.konten_html,
+       gambar = excluded.gambar,
+       fetched_at = excluded.fetched_at`,
+  ).run(desaId, jenis, judul, kontenHtml, gambar, sourceUrl);
+}
+
+/**
+ * Sinkron halaman profil/pemerintah/lembaga desa.
+ * Memakai mesin fetch yang sama seperti berita (fetchText: rotasi UA + retry).
+ * Mengembalikan ringkasan untuk digabung ke pesan sync artikel.
+ */
+export async function fetchProfilDesa(desa: Desa): Promise<string> {
+  // 1. Homepage → deteksi tautan profil dari menu
+  const home = await fetchText(desa.website, 30_000);
+  if (PROFIL_SPAM_RX.test(home)) {
+    return 'profil: dilewati (situs terindikasi konten spam)';
+  }
+  const detected = detectProfilLinks(home, desa.website);
+  const manual = parseManualProfilUrls(desa.profil_urls);
+
+  // Gabung: manual lebih dulu, lalu hasil deteksi yang belum ada
+  const seen = new Set(manual.map((m) => m.url));
+  const targets: ProfilTarget[] = [...manual];
+  for (const t of detected) {
+    if (targets.length >= MAX_PROFIL_PER_DESA) break;
+    if (!seen.has(t.url)) {
+      seen.add(t.url);
+      targets.push(t);
+    }
+  }
+  if (targets.length === 0) return 'profil: tidak ada tautan profil terdeteksi';
+
+  // 2. Fetch tiap halaman profil
+  let saved = 0;
+  let spam = 0;
+  let gagal = 0;
+  for (const t of targets) {
+    try {
+      const html = await fetchText(t.url, 30_000);
+      if (PROFIL_SPAM_RX.test(html)) {
+        spam++;
+        continue;
+      }
+      const $ = cheerio.load(html);
+      const judul = (t.judul || pickPageTitle($) || t.url).slice(0, 300);
+      const konten = sanitizeProfilHtml(html, t.url, [t.judul, pickPageTitle($)].filter(Boolean));
+      if (konten.replace(/<[^>]+>/g, '').trim().length < 100) {
+        gagal++;
+        continue;
+      }
+      const ogImg = $('meta[property="og:image"]').attr('content')?.trim() || null;
+      upsertProfil(desa.id, t.jenis, judul, konten.slice(0, MAX_PROFIL_HTML), ogImg ? absolutizeUrl(ogImg, t.url) : null, t.url);
+      saved++;
+      await new Promise((r) => setTimeout(r, 400));
+    } catch {
+      gagal++;
+    }
+  }
+
+  // 3. Hapus entri lama yang sudah tidak terdeteksi/dikonfigurasi.
+  //    Hanya jika minimal satu fetch sukses — supaya situs down sesaat
+  //    tidak menghapus semua profil yang tersimpan.
+  if (saved > 0) {
+    const placeholders = targets.map(() => '?').join(',');
+    db.prepare(`DELETE FROM profil_desa WHERE desa_id = ? AND source_url NOT IN (${placeholders})`).run(
+      desa.id,
+      ...targets.map((t) => t.url),
+    );
+  }
+
+  return `profil: ${saved} tersimpan${spam ? `, ${spam} spam dilewati` : ''}${gagal ? `, ${gagal} gagal` : ''}`;
+}
+
 /* ====================== PUSH INGEST ====================== */
 
 // Bentuk payload artikel yang dikirim desa (kompatibel dengan format OpenSID)
@@ -779,10 +1050,21 @@ export async function syncDesa(desa: Desa): Promise<SyncResult> {
     }
   }
 
+  // Sinkron halaman profil & lembaga desa (mengikuti izin scraper_enabled).
+  // Kegagalan di sini tidak menggagalkan sinkron artikel.
+  let profilMsg = '';
+  if (desa.scraper_enabled) {
+    try {
+      profilMsg = await fetchProfilDesa(desa);
+    } catch (e) {
+      profilMsg = `profil: gagal (${(e as Error).message})`;
+    }
+  }
+
   if (items.length === 0) {
     return {
       status: 'failed',
-      message: errors.join(' | ') || 'tidak ada item yang berhasil diambil',
+      message: [errors.join(' | ') || 'tidak ada item yang berhasil diambil', profilMsg].filter(Boolean).join(' | '),
       newCount: 0,
       updatedCount: 0,
       durationMs: Date.now() - start,
@@ -803,7 +1085,7 @@ export async function syncDesa(desa: Desa): Promise<SyncResult> {
     usedSources.length > 1 ? 'mixed' : usedSources[0] ?? 'rss';
   return {
     status: 'ok',
-    message: errors.length ? `partial (${errors.join('; ')})` : 'ok',
+    message: [errors.length ? `partial (${errors.join('; ')})` : 'ok', profilMsg].filter(Boolean).join(' | '),
     newCount,
     updatedCount,
     durationMs: Date.now() - start,

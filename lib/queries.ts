@@ -1,4 +1,4 @@
-import { db, type Desa, type Artikel, type DesaApiKey, type PushInboxEntry, type Unduhan, type Aduan, type ArtikelKecamatan, type ArtikelKecamatanFoto } from './db';
+import { db, type Desa, type Artikel, type DesaApiKey, type PushInboxEntry, type Unduhan, type Aduan, type ArtikelKecamatan, type ArtikelKecamatanFoto, type ProfilDesa } from './db';
 import crypto from 'crypto';
 
 export type ArtikelWithDesa = Artikel & { desa: Pick<Desa, 'slug' | 'nama'> };
@@ -149,6 +149,7 @@ export function getDesaByApiKey(apiKey: string): { desa: Desa; apiKeyRow: DesaAp
     last_sync_at: row.last_sync_at, last_sync_status: row.last_sync_status,
     last_sync_message: row.last_sync_message, created_at: row.created_at,
     opensid_api_url: row.opensid_api_url, opensid_api_token: row.opensid_api_token,
+    profil_urls: row.profil_urls,
   };
   const apiKeyRow: DesaApiKey = {
     id: row.k_id, desa_id: row.id, api_key: row.k_api_key, is_active: row.k_is_active,
@@ -448,4 +449,30 @@ export function getArtikelByDesaAdmin(
     .all(...params, pageSize, (page - 1) * pageSize) as Artikel[];
 
   return { items, total, page, pageSize, totalPages };
+}
+
+// ===== Profil & lembaga desa (hasil sinkron) =====
+export const PROFIL_JENIS_LABEL: Record<string, string> = {
+  pemerintah: 'Pemerintah Desa',
+  profil: 'Profil Wilayah',
+  sejarah: 'Sejarah',
+  visi_misi: 'Visi & Misi',
+  lembaga: 'Lembaga Desa',
+};
+
+const PROFIL_JENIS_ORDER: Record<string, number> = {
+  pemerintah: 0,
+  profil: 1,
+  sejarah: 2,
+  visi_misi: 3,
+  lembaga: 4,
+};
+
+export function getProfilByDesaId(desaId: number): ProfilDesa[] {
+  const rows = db.prepare('SELECT * FROM profil_desa WHERE desa_id = ?').all(desaId) as ProfilDesa[];
+  return rows.sort(
+    (a, b) =>
+      (PROFIL_JENIS_ORDER[a.jenis] ?? 9) - (PROFIL_JENIS_ORDER[b.jenis] ?? 9) ||
+      a.judul.localeCompare(b.judul),
+  );
 }

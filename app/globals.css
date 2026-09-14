@@ -166,6 +166,40 @@ h1, h2, h3, h4 {
   font-family: var(--font-mono);
   font-size: 0.9em;
 }
+/* Tabel & heading tambahan — dipakai konten profil/perangkat desa
+   hasil sinkron (tabel struktur organisasi dll.) */
+.prose-article h1 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 1.4em 0 0.6em;
+  color: var(--color-foreground);
+}
+.prose-article h4 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 1.1em 0 0.4em;
+  color: var(--color-foreground);
+}
+.prose-article table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.1em 0;
+  font-size: 0.95em;
+}
+.prose-article th,
+.prose-article td {
+  border: 1px solid var(--color-border);
+  padding: 0.5em 0.75em;
+  text-align: left;
+  vertical-align: top;
+}
+.prose-article th {
+  background: var(--color-muted);
+  font-weight: 600;
+}
+.prose-article figure {
+  margin: 1.1em 0;
+}
 
 /* Animations */
 @keyframes fadeUp {

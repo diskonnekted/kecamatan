@@ -707,3 +707,57 @@ export async function deleteArtikelDesaAction(formData: FormData) {
 
   redirect(withMsg("message", `Artikel "${artikel.judul}" berhasil dihapus dari portal`));
 }
+
+// ===== Profil & lembaga desa (hasil sinkron) =====
+export async function saveProfilUrlsAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/admin/login");
+
+  const desaId = Number(formData.get("desa_id") ?? 0);
+  if (!desaId) redirect("/admin/desa");
+
+  const raw = String(formData.get("profil_urls") ?? "");
+  const urls = raw
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter((s) => /^https?:\/\//i.test(s))
+    .slice(0, 20);
+
+  db.prepare("UPDATE desa SET profil_urls = ? WHERE id = ?").run(
+    urls.length ? JSON.stringify(urls) : null,
+    desaId,
+  );
+
+  redirect(
+    `/admin/desa/${desaId}?message=${encodeURIComponent(
+      `Daftar URL profil manual disimpan (${urls.length} URL). Diproses pada sinkron berikutnya.`,
+    )}`,
+  );
+}
+
+export async function deleteProfilDesaAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/admin/login");
+
+  const id = Number(formData.get("profil_id") ?? 0);
+  const desaId = Number(formData.get("desa_id") ?? 0);
+  if (!id || !desaId) redirect("/admin/desa");
+
+  const row = db
+    .prepare(
+      `SELECT p.judul, d.slug AS desa_slug
+       FROM profil_desa p JOIN desa d ON d.id = p.desa_id
+       WHERE p.id = ? AND p.desa_id = ?`,
+    )
+    .get(id, desaId) as { judul: string; desa_slug: string } | undefined;
+
+  if (!row) {
+    redirect(`/admin/desa/${desaId}?error=${encodeURIComponent("Entri profil tidak ditemukan")}`);
+  }
+
+  db.prepare("DELETE FROM profil_desa WHERE id = ? AND desa_id = ?").run(id, desaId);
+
+  revalidatePath(`/desa/${row.desa_slug}`);
+
+  redirect(`/admin/desa/${desaId}?message=${encodeURIComponent(`Profil "${row.judul}" dihapus dari portal`)}`);
+}

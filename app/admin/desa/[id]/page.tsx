@@ -1,8 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { db, type Desa } from "@/lib/db";
-import { getApiKeyByDesaId, getArtikelByDesaAdmin } from "@/lib/queries";
-import { generateApiKeyAction, revokeApiKeyAction, reactivateApiKeyAction, deleteApiKeyAction, updateDesaAction, triggerSyncAction, deleteArtikelDesaAction } from "../../actions";
+import { getApiKeyByDesaId, getArtikelByDesaAdmin, getProfilByDesaId, PROFIL_JENIS_LABEL } from "@/lib/queries";
+import { generateApiKeyAction, revokeApiKeyAction, reactivateApiKeyAction, deleteApiKeyAction, updateDesaAction, triggerSyncAction, deleteArtikelDesaAction, saveProfilUrlsAction, deleteProfilDesaAction } from "../../actions";
 import { ConfirmSubmitButton } from "../../confirm-button";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +37,16 @@ export default async function AdminDesaDetailPage(props: { params: Promise<{ id:
     q,
     page: Math.max(1, parseInt(searchParams.page ?? "1", 10) || 1),
   });
+
+  // Data untuk bagian Profil & Lembaga (hasil sinkron)
+  const profilItems = getProfilByDesaId(desaId);
+  let manualProfilUrls = "";
+  try {
+    const arr = desa.profil_urls ? (JSON.parse(desa.profil_urls) as unknown) : [];
+    if (Array.isArray(arr)) manualProfilUrls = arr.filter((x) => typeof x === "string").join("\n");
+  } catch {
+    manualProfilUrls = "";
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 px-4 py-8 sm:px-6 lg:px-10">
@@ -411,6 +421,76 @@ Interval     : setiap 6 jam (atau sesuai kebutuhan)`}
               </div>
             </div>
           )}
+        </section>
+
+        {/* === PROFIL & LEMBAGA DESA (HASIL SINKRON) === */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900">🏛️ Profil & Lembaga Desa</h2>
+          <p className="mt-1 max-w-2xl text-sm text-slate-600">
+            Halaman profil (Pemerintah Desa, Profil Wilayah, Sejarah, Visi & Misi, Lembaga) dideteksi
+            otomatis dari menu situs desa setiap sinkron berjalan. Gunakan daftar URL manual di bawah
+            untuk menambah/mengganti halaman yang terlewat — satu URL per baris.
+          </p>
+
+          {profilItems.length === 0 ? (
+            <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+              Belum ada halaman profil tersimpan. Jalankan sinkron, atau tambahkan URL manual di bawah.
+            </p>
+          ) : (
+            <ul className="mt-4 divide-y divide-slate-100 rounded-lg border border-slate-200">
+              {profilItems.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="inline-flex shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                      {PROFIL_JENIS_LABEL[p.jenis] ?? p.jenis}
+                    </span>
+                    <a
+                      href={p.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="truncate font-medium text-slate-900 hover:text-blue-700"
+                      title={p.source_url}
+                    >
+                      {p.judul}
+                    </a>
+                    <span className="hidden whitespace-nowrap text-xs text-slate-400 sm:inline">
+                      diambil {p.fetched_at}
+                    </span>
+                  </div>
+                  <form action={deleteProfilDesaAction} className="shrink-0">
+                    <input type="hidden" name="profil_id" value={p.id} />
+                    <input type="hidden" name="desa_id" value={desa.id} />
+                    <ConfirmSubmitButton
+                      confirmMessage={`Hapus profil "${p.judul}" dari portal?`}
+                      className="rounded-md border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                    >
+                      Hapus
+                    </ConfirmSubmitButton>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <form action={saveProfilUrlsAction} className="mt-4 space-y-2">
+            <input type="hidden" name="desa_id" value={desa.id} />
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+              URL profil manual (opsional, satu per baris)
+            </label>
+            <textarea
+              name="profil_urls"
+              rows={4}
+              defaultValue={manualProfilUrls}
+              placeholder={"https://" + desa.slug + "-banjarnegara.desa.id/artikel/2016/8/24/pemerintah-desa"}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs"
+            />
+            <button
+              type="submit"
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            >
+              Simpan URL Manual
+            </button>
+          </form>
         </section>
       </div>
     </main>

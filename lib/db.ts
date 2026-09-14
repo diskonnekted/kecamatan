@@ -50,6 +50,9 @@ function ensureSchemaSync(db: Database.Database) {
   if (!hasCol("opensid_api_token")) {
     db.exec("ALTER TABLE desa ADD COLUMN opensid_api_token TEXT");
   }
+  if (!hasCol("profil_urls")) {
+    db.exec("ALTER TABLE desa ADD COLUMN profil_urls TEXT");
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS artikel (
@@ -149,6 +152,22 @@ function ensureSchemaSync(db: Database.Database) {
       count INTEGER NOT NULL DEFAULT 0
     );
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS profil_desa (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      desa_id INTEGER NOT NULL,
+      jenis TEXT NOT NULL,
+      judul TEXT NOT NULL,
+      konten_html TEXT,
+      gambar TEXT,
+      source_url TEXT NOT NULL,
+      fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (desa_id, source_url),
+      FOREIGN KEY (desa_id) REFERENCES desa(id) ON DELETE CASCADE
+    );
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_profil_desa_desa ON profil_desa(desa_id);`);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS profil_kecamatan (
@@ -317,6 +336,18 @@ export type Desa = {
   created_at: string;
   opensid_api_url: string | null;
   opensid_api_token: string | null;
+  profil_urls: string | null;
+};
+
+export type ProfilDesa = {
+  id: number;
+  desa_id: number;
+  jenis: string; // 'pemerintah' | 'profil' | 'sejarah' | 'visi_misi' | 'lembaga'
+  judul: string;
+  konten_html: string | null;
+  gambar: string | null;
+  source_url: string;
+  fetched_at: string;
 };
 
 export type Artikel = {

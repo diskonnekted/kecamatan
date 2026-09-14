@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getAllDesa, getDesaBySlug, getRecentArtikel } from "@/lib/queries";
+import { getAllDesa, getDesaBySlug, getRecentArtikel, getProfilByDesaId } from "@/lib/queries";
 import { ArticleCard } from "@/components/article-card";
+import { DesaProfilSection } from "@/components/desa-profil";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,7 @@ export default async function DesaDetailPage({
   const others = all.filter((d) => d.id !== desa.id);
 
   const artikel = getRecentArtikel(24, slug);
+  const profilItems = getProfilByDesaId(desa.id);
   const total = (
     db
       .prepare(
@@ -147,6 +149,8 @@ export default async function DesaDetailPage({
             {desa.last_sync_message}
           </div>
         )}
+
+        <DesaProfilSection items={profilItems} />
 
         <div className="flex items-end justify-between mb-6">
           <div>
