@@ -112,6 +112,7 @@ h1, h2, h3, h4 {
   line-height: 1.75;
   color: #1f2937;
   font-size: 1.05rem;
+  overflow-wrap: break-word;
 }
 /* Clearfix: konten scrape sering berisi gambar float:left inline;
    tanpa ini elemen float bocor keluar container dan mengacaukan
@@ -181,7 +182,9 @@ h1, h2, h3, h4 {
   color: var(--color-foreground);
 }
 .prose-article table {
-  width: 100%;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   margin: 1.1em 0;
   font-size: 0.95em;
@@ -199,6 +202,15 @@ h1, h2, h3, h4 {
 }
 .prose-article figure {
   margin: 1.1em 0;
+}
+.prose-article figure img {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+.prose-article svg {
+  max-width: 100%;
+  height: auto;
 }
 
 /* Animations */

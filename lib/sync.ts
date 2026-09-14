@@ -802,6 +802,9 @@ function sanitizeProfilHtml(html: string, pageUrl: string, judulCandidates: stri
   ).remove();
   root.find('img[src*="/widgets/"], img[src*="banner"]').remove();
 
+  // buang gambar sampul ganda — komponen portal sudah menampilkan cover dari og:image
+  root.find('img[alt*="sampul artikel" i]').remove();
+
   // potong chrome tema sebelum heading judul, lalu buang heading judulnya
   trimBeforeTitleHeading($, root, judulCandidates);
   root.find('h1').first().remove();
@@ -832,12 +835,12 @@ function sanitizeProfilHtml(html: string, pageUrl: string, judulCandidates: stri
     $(el).replaceWith($(el).contents());
   });
 
-  // gambar: absolutkan src + lazy-load
+  // gambar: absolutkan src + lazy-load; buang yang src-nya tidak valid/terpotong
   root.find('img').each((_i, el) => {
     const $img = $(el);
     const src = $img.attr('src') || $img.attr('data-src') || $img.attr('data-lazy-src') || '';
     const abs = src ? absolutizeUrl(src, pageUrl) : '';
-    if (!abs) {
+    if (!abs || !/\.(jpe?g|png|gif|webp|svg|bmp|avif)(\?|#|$)/i.test(abs)) {
       $img.remove();
       return;
     }
