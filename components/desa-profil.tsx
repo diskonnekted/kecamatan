@@ -1,7 +1,4 @@
-import type { PerangkatDesa, ProfilDesa } from '@/lib/db';
-import { PROFIL_JENIS_LABEL } from '@/lib/queries';
-
-const JENIS_ORDER = ['pemerintah', 'profil', 'sejarah', 'visi_misi', 'lembaga'];
+import type { PerangkatDesa } from '@/lib/db';
 
 function UserIcon({ className }: { className?: string }) {
   return (
@@ -21,9 +18,17 @@ function UserIcon({ className }: { className?: string }) {
   );
 }
 
-function AparaturGrid({ perangkat }: { perangkat: PerangkatDesa[] }) {
+/**
+ * Section aparatur desa: satu-satunya konten non-berita yang ditampilkan
+ * di halaman publik desa. Konten profil hasil scrape sengaja tidak lagi
+ * dirender di sini karena berantakan (menyeret seluruh chrome tema sumber);
+ * datanya tetap tersimpan dan dapat dikelola via admin.
+ */
+function DesaPerangkatSection({ perangkat = [] }: { perangkat?: PerangkatDesa[] }) {
+  if (perangkat.length === 0) return null;
+
   return (
-    <div className="mb-8">
+    <section className="mb-10">
       <div className="mb-4 flex items-center gap-3">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
@@ -39,6 +44,7 @@ function AparaturGrid({ perangkat }: { perangkat: PerangkatDesa[] }) {
           <p className="text-sm text-[var(--color-muted-foreground)]">{perangkat.length} perangkat desa</p>
         </div>
       </div>
+
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {perangkat.map((p) => (
           <div
@@ -59,145 +65,16 @@ function AparaturGrid({ perangkat }: { perangkat: PerangkatDesa[] }) {
             )}
             <div className="p-3 text-center">
               <p className="text-sm font-semibold leading-snug text-[var(--color-foreground)]">{p.nama}</p>
-              {p.jabatan && <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">{p.jabatan}</p>}
+              {p.jabatan && (
+                <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">{p.jabatan}</p>
+              )}
             </div>
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-function DesaProfilSection({
-  items,
-  perangkat = [],
-}: {
-  items: ProfilDesa[];
-  perangkat?: PerangkatDesa[];
-}) {
-  // Bila data perangkat terstruktur tersedia, entri 'pemerintah' hasil scrape mentah
-  // disembunyikan — digantikan grid aparatur yang rapi di atas.
-  const visibleItems =
-    perangkat.length > 0 ? items.filter((it) => it.jenis !== 'pemerintah') : items;
-
-  if (visibleItems.length === 0 && perangkat.length === 0) return null;
-
-  const groups = new Map<string, ProfilDesa[]>();
-  for (const it of visibleItems) {
-    const list = groups.get(it.jenis) || [];
-    list.push(it);
-    groups.set(it.jenis, list);
-  }
-  const sortedJenis = [...groups.keys()].sort(
-    (a, b) => JENIS_ORDER.indexOf(a) - JENIS_ORDER.indexOf(b),
-  );
-
-  return (
-    <section className="mb-10">
-      {perangkat.length > 0 && <AparaturGrid perangkat={perangkat} />}
-
-      {visibleItems.length > 0 && (
-        <>
-          <div className="mb-4 flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332c0-.265-.108-.52-.3-.707M4.5 21V10.332c0-.265.108-.52.3-.707M3 21h18"
-                />
-              </svg>
-            </span>
-            <div>
-              <h2 className="text-xl font-bold text-[var(--color-foreground)]">Profil &amp; Pemerintahan Desa</h2>
-              <p className="text-sm text-[var(--color-muted-foreground)]">
-                Disalin otomatis dari situs resmi desa
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {sortedJenis.map((jenis, gi) => {
-              const list = groups.get(jenis)!;
-              return (
-                <details
-                  key={jenis}
-                  className="group rounded-2xl border border-[var(--color-border)] bg-white shadow-sm"
-                  open={gi === 0}
-                >
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
-                    <span className="flex items-center gap-3">
-                      <span className="inline-flex items-center rounded-full bg-[var(--color-primary)]/10 px-3 py-1 text-xs font-semibold text-[var(--color-primary)]">
-                        {PROFIL_JENIS_LABEL[jenis] ?? jenis}
-                      </span>
-                      <span className="text-sm text-[var(--color-muted-foreground)]">
-                        {list.length} halaman
-                      </span>
-                    </span>
-                    <svg
-                      className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)] transition-transform duration-200 group-open:rotate-180"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </summary>
-                  <div className="space-y-4 border-t border-[var(--color-border)] px-5 py-4">
-                    {list.map((p) => (
-                      <article key={p.id} className="rounded-xl bg-[var(--color-background)]/60 p-4">
-                        <h3 className="mb-2 text-base font-semibold text-[var(--color-foreground)]">
-                          {p.judul}
-                        </h3>
-                        {p.gambar && (
-                          <img
-                            src={p.gambar}
-                            alt={p.judul}
-                            loading="lazy"
-                            className="mb-3 max-h-64 w-full rounded-lg object-cover"
-                          />
-                        )}
-                        {p.konten_html ? (
-                          <div
-                            className="prose-article text-sm"
-                            dangerouslySetInnerHTML={{ __html: p.konten_html }}
-                          />
-                        ) : (
-                          <p className="text-sm text-[var(--color-muted-foreground)]">
-                            Konten tidak tersedia.{' '}
-                            <a
-                              href={p.source_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[var(--color-primary)] underline"
-                            >
-                              Lihat di situs desa
-                            </a>
-                          </p>
-                        )}
-                        <p className="mt-3 text-xs text-[var(--color-muted-foreground)]">
-                          Sumber:{' '}
-                          <a
-                            href={p.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline hover:text-[var(--color-primary)]"
-                          >
-                            situs desa
-                          </a>
-                        </p>
-                      </article>
-                    ))}
-                  </div>
-                </details>
-              );
-            })}
-          </div>
-        </>
-      )}
     </section>
   );
 }
-export { DesaProfilSection };
-export default DesaProfilSection;
+
+export { DesaPerangkatSection };
+export default DesaPerangkatSection;
