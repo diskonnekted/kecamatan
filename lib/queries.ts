@@ -525,17 +525,17 @@ export function getStatistikRingkasanSemuaDesa(): {
  */
 export function getStatistikAgregatKecamatan(kategori?: string): StatistikDesa[] {
   const select = `
-    SELECT 0 AS id, 0 AS desa_id, kategori, MIN(urutan) AS urutan, nama,
-           SUM(jumlah) AS jumlah, SUM(laki) AS laki, SUM(perempuan) AS perempuan,
+    SELECT 0 AS id, 0 AS desa_id, s.kategori, MIN(s.urutan) AS urutan, s.nama,
+           SUM(s.jumlah) AS jumlah, SUM(s.laki) AS laki, SUM(s.perempuan) AS perempuan,
            NULL AS persen
     FROM statistik_desa s
     JOIN desa d ON d.id = s.desa_id AND d.is_active = 1`;
   if (kategori) {
     return db
-      .prepare(`${select} WHERE kategori = ? GROUP BY kategori, nama ORDER BY urutan ASC, nama ASC`)
+      .prepare(`${select} WHERE s.kategori = ? GROUP BY s.kategori, s.nama ORDER BY urutan ASC, s.nama ASC`)
       .all(kategori) as StatistikDesa[];
   }
   return db
-    .prepare(`${select} GROUP BY kategori, nama ORDER BY kategori ASC, urutan ASC, nama ASC`)
+    .prepare(`${select} GROUP BY s.kategori, s.nama ORDER BY s.kategori ASC, urutan ASC, s.nama ASC`)
     .all() as StatistikDesa[];
 }
