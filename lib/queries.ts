@@ -517,3 +517,25 @@ export function getStatistikRingkasanSemuaDesa(): {
     )
     .all() as { slug: string; nama: string; penduduk: number; laki: number; perempuan: number; statistik_at: string | null }[];
 }
+
+/**
+ * Agregasi statistik SELURUH desa aktif menjadi satu kecamatan.
+ * Menjumlahkan jumlah/laki/perempuan per (kategori, nama) — label OpenSID
+ * konsisten antar desa sehingga aman di-GROUP BY nama.
+ */
+export function getStatistikAgregatKecamatan(kategori?: string): StatistikDesa[] {
+  const select = `
+    SELECT 0 AS id, 0 AS desa_id, kategori, MIN(urutan) AS urutan, nama,
+           SUM(jumlah) AS jumlah, SUM(laki) AS laki, SUM(perempuan) AS perempuan,
+           NULL AS persen
+    FROM statistik_desa s
+    JOIN desa d ON d.id = s.desa_id AND d.is_active = 1`;
+  if (kategori) {
+    return db
+      .prepare(`${select} WHERE kategori = ? GROUP BY kategori, nama ORDER BY urutan ASC, nama ASC`)
+      .all(kategori) as StatistikDesa[];
+  }
+  return db
+    .prepare(`${select} GROUP BY kategori, nama ORDER BY kategori ASC, urutan ASC, nama ASC`)
+    .all() as StatistikDesa[];
+}

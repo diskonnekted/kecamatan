@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { getStatistikRingkasanSemuaDesa } from "@/lib/queries";
+import { getStatistikRingkasanSemuaDesa, getStatistikAgregatKecamatan } from "@/lib/queries";
 import { getDanaDesaPerKecamatan, getKecamatanPenduduk } from "@/lib/opendata";
-import { BarList, fmtNum } from "@/components/analitik-charts";
+import { BarList, Donut, Pyramid, fmtNum } from "@/components/analitik-charts";
+import { statistikLabel } from "@/lib/analitik";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -77,6 +78,24 @@ export default async function AnalitikPage() {
   const desaDenganData = ringkasan.filter((r) => r.penduduk > 0).length;
   const totalPendudukTersalin = ringkasan.reduce((s, r) => s + r.penduduk, 0);
 
+  // Agregasi demografi SELURUH kecamatan (penjumlahan statistik semua desa)
+  const aggUmur = getStatistikAgregatKecamatan("umur_rentang");
+  const aggJk = getStatistikAgregatKecamatan("jenis_kelamin");
+  const aggAgama = getStatistikAgregatKecamatan("agama");
+  const aggPendidikan = getStatistikAgregatKecamatan("pendidikan_kk");
+  const aggPekerjaan = getStatistikAgregatKecamatan("pekerjaan").sort((a, b) => b.jumlah - a.jumlah);
+  const aggKawin = getStatistikAgregatKecamatan("status_kawin");
+  const aggStatusPenduduk = getStatistikAgregatKecamatan("status_penduduk");
+  const aggDarah = getStatistikAgregatKecamatan("golongan_darah");
+  const aggCacat = getStatistikAgregatKecamatan("cacat").reduce((s, r) => s + r.jumlah, 0);
+  const aggPenyakit = getStatistikAgregatKecamatan("penyakit_menahun").reduce((s, r) => s + r.jumlah, 0);
+  const adaAgregat = aggUmur.length > 0 || aggJk.length > 0;
+
+  // Penduduk per desa (untuk grafik perbandingan visual)
+  const pendudukPerDesa = [...ringkasan]
+    .filter((r) => r.penduduk > 0)
+    .sort((a, b) => b.penduduk - a.penduduk);
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       <h1 className="text-2xl font-bold text-[var(--color-foreground)]">Analitik Desa</h1>
@@ -104,6 +123,114 @@ export default async function AnalitikPage() {
           sub="dari situs desa (OpenSID)"
         />
       </div>
+
+      {/* ===== Demografi seluruh kecamatan (agregat 17 desa) ===== */}
+      {adaAgregat && (
+        <>
+          <h2 className="mt-8 text-xl font-bold text-[var(--color-foreground)]">
+            Demografi Kecamatan Banjarmangu
+          </h2>
+          <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">
+            Hasil penjumlahan statistik OpenSID seluruh {desaDenganData} desa — potret satu kecamatan penuh.
+          </p>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Section title="Piramida Penduduk Kecamatan" subtitle={statistikLabel("umur_rentang")}>
+              {aggUmur.length > 0 ? (
+                <Pyramid rows={aggUmur.map((r) => ({ label: r.nama, laki: r.laki, perempuan: r.perempuan }))} />
+              ) : (
+                <p className="text-sm italic text-[var(--color-muted-foreground)]">Data umur belum tersedia.</p>
+              )}
+            </Section>
+
+            <Section title="Jenis Kelamin" subtitle={statistikLabel("jenis_kelamin")}>
+              {aggJk.length > 0 ? (
+                <Donut rows={aggJk.map((r) => ({ label: r.nama, value: r.jumlah }))} />
+              ) : (
+                <p className="text-sm italic text-[var(--color-muted-foreground)]">Data jenis kelamin belum tersedia.</p>
+              )}
+            </Section>
+
+            <Section title="Komposisi Agama" subtitle={statistikLabel("agama")}>
+              {aggAgama.length > 0 ? (
+                <Donut rows={aggAgama.map((r) => ({ label: r.nama, value: r.jumlah }))} />
+              ) : (
+                <p className="text-sm italic text-[var(--color-muted-foreground)]">Data agama belum tersedia.</p>
+              )}
+            </Section>
+
+            <Section title="Pendidikan dalam KK" subtitle={statistikLabel("pendidikan_kk")}>
+              {aggPendidikan.length > 0 ? (
+                <BarList rows={aggPendidikan.map((r) => ({ label: r.nama, value: r.jumlah }))} />
+              ) : (
+                <p className="text-sm italic text-[var(--color-muted-foreground)]">Data pendidikan belum tersedia.</p>
+              )}
+            </Section>
+
+            <Section title="Pekerjaan Warga Kecamatan" subtitle="10 pekerjaan terbanyak di seluruh desa">
+              {aggPekerjaan.length > 0 ? (
+                <BarList
+                  rows={aggPekerjaan.slice(0, 10).map((r) => ({ label: r.nama, value: r.jumlah }))}
+                  color="#16a34a"
+                />
+              ) : (
+                <p className="text-sm italic text-[var(--color-muted-foreground)]">Data pekerjaan belum tersedia.</p>
+              )}
+            </Section>
+
+            <Section title="Status Perkawinan" subtitle={statistikLabel("status_kawin")}>
+              {aggKawin.length > 0 ? (
+                <BarList rows={aggKawin.map((r) => ({ label: r.nama, value: r.jumlah }))} color="#7c3aed" />
+              ) : (
+                <p className="text-sm italic text-[var(--color-muted-foreground)]">Data status perkawinan belum tersedia.</p>
+              )}
+            </Section>
+
+            <Section title="Status Penduduk" subtitle={statistikLabel("status_penduduk")}>
+              {aggStatusPenduduk.length > 0 ? (
+                <BarList rows={aggStatusPenduduk.map((r) => ({ label: r.nama, value: r.jumlah }))} color="#0891b2" />
+              ) : (
+                <p className="text-sm italic text-[var(--color-muted-foreground)]">Data status penduduk belum tersedia.</p>
+              )}
+            </Section>
+
+            <Section title="Golongan Darah" subtitle={statistikLabel("golongan_darah")}>
+              {aggDarah.length > 0 ? (
+                <BarList rows={aggDarah.map((r) => ({ label: r.nama, value: r.jumlah }))} color="#dc2626" />
+              ) : (
+                <p className="text-sm italic text-[var(--color-muted-foreground)]">Data golongan darah belum tersedia.</p>
+              )}
+            </Section>
+
+            {(aggCacat > 0 || aggPenyakit > 0) && (
+              <Section title="Kesehatan & Disabilitas" subtitle="Total seluruh kecamatan">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-2xl font-bold tabular-nums text-[var(--color-foreground)]">{fmtNum(aggCacat)}</p>
+                    <p className="text-xs text-[var(--color-muted-foreground)]">penyandang cacat</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold tabular-nums text-[var(--color-foreground)]">{fmtNum(aggPenyakit)}</p>
+                    <p className="text-xs text-[var(--color-muted-foreground)]">penderita penyakit menahun</p>
+                  </div>
+                </div>
+              </Section>
+            )}
+
+            <Section title="Penduduk per Desa" subtitle="Perbandingan visual jumlah penduduk antar desa">
+              <BarList
+                rows={pendudukPerDesa.map((r) => ({ label: r.nama, value: r.penduduk }))}
+                color="#2563eb"
+              />
+            </Section>
+          </div>
+
+          <h2 className="mt-8 text-xl font-bold text-[var(--color-foreground)]">Keuangan Desa</h2>
+          <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">
+            Dana desa dari Open Data Kabupaten Banjarnegara.
+          </p>
+        </>
+      )}
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Tren dana desa */}
