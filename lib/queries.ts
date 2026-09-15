@@ -524,18 +524,26 @@ export function getStatistikRingkasanSemuaDesa(): {
  * konsisten antar desa sehingga aman di-GROUP BY nama.
  */
 export function getStatistikAgregatKecamatan(kategori?: string): StatistikDesa[] {
-  const select = `
-    SELECT 0 AS id, 0 AS desa_id, s.kategori, MIN(s.urutan) AS urutan, s.nama,
-           SUM(s.jumlah) AS jumlah, SUM(s.laki) AS laki, SUM(s.perempuan) AS perempuan,
-           NULL AS persen
+  // Subquery menormalisasi label umur_kategori: "TUA (31 - 150)" & "TUA (31 - 99999)"
+  // (rentang dalam kurung bisa beda antar desa) digabung menjadi "TUA".
+  const inner = `
+    SELECT s.kategori AS kategori, s.urutan AS urutan,
+           CASE WHEN s.kategori = 'umur_kategori' AND INSTR(s.nama, ' (') > 0
+                THEN TRIM(SUBSTR(s.nama, 1, INSTR(s.nama, ' (') - 1))
+                ELSE s.nama END AS nama,
+           s.jumlah AS jumlah, s.laki AS laki, s.perempuan AS perempuan
     FROM statistik_desa s
-    JOIN desa d ON d.id = s.desa_id AND d.is_active = 1`;
+    JOIN desa d ON d.id = s.desa_id AND d.is_active = 1
+    ${kategori ? 'WHERE s.kategori = ?' : ''}`;
+  const sql = `
+    SELECT 0 AS id, 0 AS desa_id, kategori, MIN(urutan) AS urutan, nama,
+           SUM(jumlah) AS jumlah, SUM(laki) AS laki, SUM(perempuan) AS perempuan,
+           NULL AS persen
+    FROM (${inner})
+    GROUP BY kategori, nama
+    ORDER BY ${kategori ? 'urutan ASC, nama ASC' : 'kategori ASC, urutan ASC, nama ASC'}`;
   if (kategori) {
-    return db
-      .prepare(`${select} WHERE s.kategori = ? GROUP BY s.kategori, s.nama ORDER BY urutan ASC, s.nama ASC`)
-      .all(kategori) as StatistikDesa[];
+    return db.prepare(sql).all(kategori) as StatistikDesa[];
   }
-  return db
-    .prepare(`${select} GROUP BY s.kategori, s.nama ORDER BY s.kategori ASC, urutan ASC, s.nama ASC`)
-    .all() as StatistikDesa[];
+  return db.prepare(sql).all() as StatistikDesa[];
 }

@@ -173,7 +173,7 @@ export default async function AnalitikDesaPage({ params }: { params: Promise<Par
         <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Panel title="Piramida Penduduk" subtitle={statistikLabel("umur_rentang")}>
             {umur.length > 0 ? (
-              <Pyramid rows={umur.map((r) => ({ label: r.nama, laki: r.laki, perempuan: r.perempuan }))} />
+              <Pyramid rows={umur.filter((r) => !/belum mengisi/i.test(r.nama)).map((r) => ({ label: r.nama, laki: r.laki, perempuan: r.perempuan }))} />
             ) : (
               <EmptyNote text="Data umur belum tersedia." />
             )}

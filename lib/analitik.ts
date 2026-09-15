@@ -10,6 +10,13 @@ import { db, type Desa } from './db';
  *   A. flat:   {"data": [{"id":1, "attributes":{"nama":"X","jumlah":228,...}}]}
  *   B. nested: {"data": [{"attributes":{"label":"Pendidikan","data":[{"attributes":{"nama":"X","jumlah":"424",...}}]}}]}
  * `normalizeStatistik` menangani keduanya (angka bisa number atau string).
+ *
+ * PERHATIAN 2: ID statistik bawaan TIDAK konsisten antar versi OpenSID.
+ *   Versi lama:  8=cacat, 9=penyakit_menahun, 10=umur_rentang, 11=pendidikan_sedang, 12=umur_kategori
+ *   Versi baru (terpasang di desa-desa Banjarmangu):
+ *                9=cacat, 10=penyakit_menahun, 13=umur_rentang, 14=pendidikan_sedang, 15=umur_kategori
+ * Karena itu kategori dideteksi dari SIGNATURE LABEL baris (classifyStatistik),
+ * bukan dari ID endpoint — kebal perbedaan versi OpenSID antar desa.
  */
 
 export type StatistikRow = {
@@ -20,8 +27,13 @@ export type StatistikRow = {
   persen: string | null;
 };
 
+/**
+ * Daftar kategori statistik yang didukung. Kolom `id` = ID endpoint pada
+ * OpenSID versi baru (referensi saja) — pengambilan data memakai deteksi
+ * signature label (classifyStatistik), BUKAN pemetaan ID ini.
+ */
 export const STATISTIK_KATEGORI = [
-  { id: 10, slug: 'umur_rentang', label: 'Umur (Rentang)' },
+  { id: 13, slug: 'umur_rentang', label: 'Umur (Rentang)' },
   { id: 4, slug: 'jenis_kelamin', label: 'Jenis Kelamin' },
   { id: 3, slug: 'agama', label: 'Agama' },
   { id: 0, slug: 'pendidikan_kk', label: 'Pendidikan dalam KK' },
@@ -29,10 +41,10 @@ export const STATISTIK_KATEGORI = [
   { id: 2, slug: 'status_kawin', label: 'Status Perkawinan' },
   { id: 6, slug: 'status_penduduk', label: 'Status Penduduk' },
   { id: 7, slug: 'golongan_darah', label: 'Golongan Darah' },
-  { id: 8, slug: 'cacat', label: 'Penyandang Cacat' },
-  { id: 9, slug: 'penyakit_menahun', label: 'Penyakit Menahun' },
-  { id: 11, slug: 'pendidikan_sedang', label: 'Pendidikan Sedang Ditempuh' },
-  { id: 12, slug: 'umur_kategori', label: 'Umur (Kategori)' },
+  { id: 9, slug: 'cacat', label: 'Penyandang Cacat' },
+  { id: 10, slug: 'penyakit_menahun', label: 'Penyakit Menahun' },
+  { id: 14, slug: 'pendidikan_sedang', label: 'Pendidikan Sedang Ditempuh' },
+  { id: 15, slug: 'umur_kategori', label: 'Umur (Kategori)' },
   { id: 5, slug: 'warga_negara', label: 'Kewarganegaraan' },
 ] as const;
 
@@ -111,8 +123,42 @@ function replaceStatistik(desaId: number, kategori: string, rows: StatistikRow[]
 }
 
 /**
- * Ambil 13 kategori statistik dari situs desa dan simpan ke DB.
- * Di-throttle 20 jam (kecuali force). Kegagalan per kategori di-skip (data lama dipertahankan).
+ * Deteksi slug kategori dari daftar label baris statistik.
+ * Kebal perbedaan pemetaan ID antar versi OpenSID (lihat komentar header).
+ * Urutan pemeriksaan penting — yang paling spesifik didahulukan.
+ */
+export function classifyStatistik(names: string[]): StatistikKategoriSlug | null {
+  const lower = names.map((n) => n.toLowerCase().trim());
+  const exact = new Set(lower);
+  const has = (frag: string) => lower.some((n) => n.includes(frag));
+  const umurRentangCount = names.filter((n) =>
+    /^\s*(umur\s+)?\d+\s*(s\/d|s\.d\.|-)\s*\d+/i.test(n),
+  ).length;
+
+  if (has('laki-laki') && has('perempuan')) return 'jenis_kelamin';
+  if (has('islam') && (has('kristen') || has('katholik') || has('hindu') || has('budha'))) return 'agama';
+  if (has('belum tamat sd') || has('tidak/belum sekolah')) return 'pendidikan_kk';
+  if (has('mengurus rumah tangga') || has('belum/tidak bekerja')) return 'pekerjaan';
+  if (has('belum kawin')) return 'status_kawin';
+  if (exact.has('tetap') && exact.has('tidak tetap')) return 'status_penduduk';
+  if (exact.has('wni')) return 'warga_negara';
+  if (exact.has('a') && exact.has('ab') && exact.has('o')) return 'golongan_darah';
+  if (has('cacat fisik') || has('cacat netra')) return 'cacat';
+  if (has('jantung') || has('asthma') || has('tidak ada/tidak sakit')) return 'penyakit_menahun';
+  if (has('balita')) return 'umur_kategori';
+  if (umurRentangCount >= 2) return 'umur_rentang';
+  if (has('kelompok bermain') || has('sedang sd')) return 'pendidikan_sedang';
+  return null;
+}
+
+/** Rentang ID yang di-probe (mencakup pemetaan versi lama & baru OpenSID). */
+const PROBE_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+
+/**
+ * Ambil statistik dari situs desa dan simpan ke DB.
+ * Mem-probe ID 0–15, mengklasifikasi isi respons berdasarkan signature label,
+ * lalu menyimpan per kategori. Di-throttle 20 jam (kecuali force).
+ * Kegagalan per endpoint di-skip (data lama dipertahankan).
  * Mengembalikan ringkasan pesan, atau string kosong bila di-skip throttle.
  */
 export async function fetchStatistikDesa(
@@ -125,27 +171,31 @@ export async function fetchStatistikDesa(
   }
 
   const base = desa.website.replace(/\/+$/, '');
-  let kategoriOk = 0;
+  const claimed = new Set<StatistikKategoriSlug>();
   let totalRows = 0;
-  for (const kat of STATISTIK_KATEGORI) {
+  for (const id of PROBE_IDS) {
+    let rows: StatistikRow[];
     try {
-      const res = await fetch(`${base}/internal_api/statistik/${kat.id}`, {
+      const res = await fetch(`${base}/internal_api/statistik/${id}`, {
         headers: { 'User-Agent': UA, Accept: 'application/json' },
         signal: AbortSignal.timeout(20_000),
       });
       if (!res.ok) continue;
       const json: unknown = await res.json();
-      const rows = normalizeStatistik(json);
-      replaceStatistik(desa.id, kat.slug, rows);
-      if (rows.length > 0) kategoriOk++;
-      totalRows += rows.length;
+      rows = normalizeStatistik(json);
     } catch {
       continue;
     }
+    if (rows.length === 0) continue;
+    const slug = classifyStatistik(rows.map((r) => r.nama));
+    if (!slug || claimed.has(slug)) continue; // kategori sudah terisi dari ID lain
+    claimed.add(slug);
+    replaceStatistik(desa.id, slug, rows);
+    totalRows += rows.length;
   }
   db.prepare('UPDATE desa SET statistik_at = ? WHERE id = ?').run(
     new Date().toISOString().slice(0, 19).replace('T', ' '),
     desa.id,
   );
-  return `statistik: ${kategoriOk}/${STATISTIK_KATEGORI.length} kategori (${totalRows} baris)`;
+  return `statistik: ${claimed.size}/${STATISTIK_KATEGORI.length} kategori (${totalRows} baris)`;
 }

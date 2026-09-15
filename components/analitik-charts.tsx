@@ -125,20 +125,23 @@ export function Pyramid({ rows }: { rows: { label: string; laki: number; perempu
   const max = Math.max(...data.map((r) => Math.max(r.laki, r.perempuan)));
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 4.5rem 1fr', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--color-muted-foreground)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 5.5rem 1fr', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--color-muted-foreground)' }}>
         <span style={{ textAlign: 'right' }}>Laki-laki</span>
         <span style={{ textAlign: 'center' }}>Umur</span>
         <span>Perempuan</span>
       </div>
       {data.map((r) => (
-        <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '1fr 4.5rem 1fr', gap: '0.5rem', alignItems: 'center' }}>
+        <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '1fr 5.5rem 1fr', gap: '0.5rem', alignItems: 'center' }}>
           <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.4rem' }}>
             <span style={{ fontSize: '0.6875rem', color: 'var(--color-muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
               {fmtNum(r.laki)}
             </span>
             <div style={{ height: '0.85rem', width: `${Math.max(2, Math.round((r.laki / max) * 100))}%`, maxWidth: '100%', background: '#2563eb', borderRadius: '0.25rem 0 0 0.25rem' }} />
           </div>
-          <span style={{ textAlign: 'center', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-foreground)', whiteSpace: 'nowrap' }}>
+          <span
+            title={r.label}
+            style={{ textAlign: 'center', fontSize: '0.6875rem', fontWeight: 600, lineHeight: 1.15, color: 'var(--color-foreground)', overflowWrap: 'anywhere', minWidth: 0 }}
+          >
             {r.label}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>

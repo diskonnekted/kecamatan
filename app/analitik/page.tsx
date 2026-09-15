@@ -78,8 +78,11 @@ export default async function AnalitikPage() {
   const desaDenganData = ringkasan.filter((r) => r.penduduk > 0).length;
   const totalPendudukTersalin = ringkasan.reduce((s, r) => s + r.penduduk, 0);
 
-  // Agregasi demografi SELURUH kecamatan (penjumlahan statistik semua desa)
-  const aggUmur = getStatistikAgregatKecamatan("umur_rentang");
+  // Agregasi demografi SELURUH kecamatan (penjumlahan statistik semua desa).
+  // Piramida memakai umur_kategori (label konsisten antar desa: BALITA/ANAK-ANAK/
+  // DEWASA/TUA) — umur_rentang tidak konsisten karena tiap desa bisa mengatur
+  // rentangnya sendiri di OpenSID.
+  const aggUmur = getStatistikAgregatKecamatan("umur_kategori");
   const aggJk = getStatistikAgregatKecamatan("jenis_kelamin");
   const aggAgama = getStatistikAgregatKecamatan("agama");
   const aggPendidikan = getStatistikAgregatKecamatan("pendidikan_kk");
@@ -135,9 +138,13 @@ export default async function AnalitikPage() {
           </p>
 
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Section title="Piramida Penduduk Kecamatan" subtitle={statistikLabel("umur_rentang")}>
+            <Section title="Piramida Penduduk Kecamatan" subtitle={statistikLabel("umur_kategori")}>
               {aggUmur.length > 0 ? (
-                <Pyramid rows={aggUmur.map((r) => ({ label: r.nama, laki: r.laki, perempuan: r.perempuan }))} />
+                <Pyramid
+                  rows={aggUmur
+                    .filter((r) => !/belum mengisi/i.test(r.nama))
+                    .map((r) => ({ label: r.nama, laki: r.laki, perempuan: r.perempuan }))}
+                />
               ) : (
                 <p className="text-sm italic text-[var(--color-muted-foreground)]">Data umur belum tersedia.</p>
               )}
