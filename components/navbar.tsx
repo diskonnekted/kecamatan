@@ -195,22 +195,22 @@ export function Navbar({ desa }: NavbarProps) {
           >
             <DesktopNavItems items={NAV_LINKS} />
             <Link
-              href="/admin"
+              href="/analitik"
               className="ml-2 inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-[var(--color-primary-foreground)] bg-[var(--color-primary)] hover:bg-[var(--color-foreground)] rounded-md transition-colors cursor-pointer"
             >
-              Admin
+              Analitik
               <svg
                 width="14"
                 height="14"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2.5"
+                strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <path d="M5 12h14" />
-                <path d="m12 5 7 7-7 7" />
+                <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+                <path d="M7 14l4-4 3 3 5-6" />
               </svg>
             </Link>
           </nav>
@@ -290,11 +290,11 @@ export function Navbar({ desa }: NavbarProps) {
 
             <div className="my-2 h-px bg-[var(--color-border)]" />
             <Link
-              href="/admin"
+              href="/analitik"
               onClick={closeMobile}
               className="block px-3 py-2 text-sm font-semibold text-white bg-[var(--color-primary)] rounded-md text-center"
             >
-              Login Admin
+              Analitik Desa
             </Link>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import Parser from 'rss-parser';
 import * as cheerio from 'cheerio';
 import { db, type Desa, type Artikel } from './db';
+import { fetchStatistikDesa } from './analitik';
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
@@ -1174,18 +1175,25 @@ export async function syncDesa(desa: Desa): Promise<SyncResult> {
   // Sinkron halaman profil & lembaga desa (mengikuti izin scraper_enabled).
   // Kegagalan di sini tidak menggagalkan sinkron artikel.
   let profilMsg = '';
+  let statistikMsg = '';
   if (desa.scraper_enabled) {
     try {
       profilMsg = await fetchProfilDesa(desa);
     } catch (e) {
       profilMsg = `profil: gagal (${(e as Error).message})`;
     }
+    // Statistik analitik (di-throttle 20 jam di dalamnya; '' bila skip)
+    try {
+      statistikMsg = await fetchStatistikDesa(desa);
+    } catch (e) {
+      statistikMsg = `statistik: gagal (${(e as Error).message})`;
+    }
   }
 
   if (items.length === 0) {
     return {
       status: 'failed',
-      message: [errors.join(' | ') || 'tidak ada item yang berhasil diambil', profilMsg].filter(Boolean).join(' | '),
+      message: [errors.join(' | ') || 'tidak ada item yang berhasil diambil', profilMsg, statistikMsg].filter(Boolean).join(' | '),
       newCount: 0,
       updatedCount: 0,
       durationMs: Date.now() - start,
@@ -1206,7 +1214,7 @@ export async function syncDesa(desa: Desa): Promise<SyncResult> {
     usedSources.length > 1 ? 'mixed' : usedSources[0] ?? 'rss';
   return {
     status: 'ok',
-    message: [errors.length ? `partial (${errors.join('; ')})` : 'ok', profilMsg].filter(Boolean).join(' | '),
+    message: [errors.length ? `partial (${errors.join('; ')})` : 'ok', profilMsg, statistikMsg].filter(Boolean).join(' | '),
     newCount,
     updatedCount,
     durationMs: Date.now() - start,

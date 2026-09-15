@@ -50,6 +50,7 @@ export const NAV_LINKS: NavItem[] = [
       { href: "/statistik/kesehatan", label: "Kesehatan" },
       { href: "/statistik/program-dan-bantuan", label: "Program dan Bantuan" },
       { href: "/statistik/anggaran-dan-realisasi", label: "Anggaran dan Realisasi" },
+      { href: "/analitik", label: "Analitik Desa" },
     ],
   },
   {

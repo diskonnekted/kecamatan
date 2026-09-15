@@ -53,6 +53,9 @@ function ensureSchemaSync(db: Database.Database) {
   if (!hasCol("profil_urls")) {
     db.exec("ALTER TABLE desa ADD COLUMN profil_urls TEXT");
   }
+  if (!hasCol("statistik_at")) {
+    db.exec("ALTER TABLE desa ADD COLUMN statistik_at TEXT");
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS artikel (
@@ -183,6 +186,23 @@ function ensureSchemaSync(db: Database.Database) {
     );
   `);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_perangkat_desa_desa ON perangkat_desa(desa_id);`);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS statistik_desa (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      desa_id INTEGER NOT NULL,
+      kategori TEXT NOT NULL,
+      urutan INTEGER NOT NULL DEFAULT 0,
+      nama TEXT NOT NULL,
+      jumlah INTEGER NOT NULL DEFAULT 0,
+      laki INTEGER NOT NULL DEFAULT 0,
+      perempuan INTEGER NOT NULL DEFAULT 0,
+      persen TEXT,
+      UNIQUE (desa_id, kategori, nama),
+      FOREIGN KEY (desa_id) REFERENCES desa(id) ON DELETE CASCADE
+    );
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_statistik_desa_desa ON statistik_desa(desa_id, kategori);`);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS profil_kecamatan (
@@ -352,6 +372,7 @@ export type Desa = {
   opensid_api_url: string | null;
   opensid_api_token: string | null;
   profil_urls: string | null;
+  statistik_at: string | null;
 };
 
 export type ProfilDesa = {
@@ -373,6 +394,18 @@ export type PerangkatDesa = {
   foto_url: string | null;
   urutan: number;
   updated_at: string;
+};
+
+export type StatistikDesa = {
+  id: number;
+  desa_id: number;
+  kategori: string; // slug, mis. 'jenis_kelamin', 'umur_rentang'
+  urutan: number;
+  nama: string;
+  jumlah: number;
+  laki: number;
+  perempuan: number;
+  persen: string | null;
 };
 
 export type Artikel = {

@@ -1,4 +1,4 @@
-import { db, type Desa, type Artikel, type DesaApiKey, type PushInboxEntry, type Unduhan, type Aduan, type ArtikelKecamatan, type ArtikelKecamatanFoto, type ProfilDesa, type PerangkatDesa } from './db';
+import { db, type Desa, type Artikel, type DesaApiKey, type PushInboxEntry, type Unduhan, type Aduan, type ArtikelKecamatan, type ArtikelKecamatanFoto, type ProfilDesa, type PerangkatDesa, type StatistikDesa } from './db';
 import crypto from 'crypto';
 
 export type ArtikelWithDesa = Artikel & { desa: Pick<Desa, 'slug' | 'nama'> };
@@ -149,7 +149,7 @@ export function getDesaByApiKey(apiKey: string): { desa: Desa; apiKeyRow: DesaAp
     last_sync_at: row.last_sync_at, last_sync_status: row.last_sync_status,
     last_sync_message: row.last_sync_message, created_at: row.created_at,
     opensid_api_url: row.opensid_api_url, opensid_api_token: row.opensid_api_token,
-    profil_urls: row.profil_urls,
+    profil_urls: row.profil_urls, statistik_at: row.statistik_at,
   };
   const apiKeyRow: DesaApiKey = {
     id: row.k_id, desa_id: row.id, api_key: row.k_api_key, is_active: row.k_is_active,
@@ -481,4 +481,39 @@ export function getPerangkatByDesaId(desaId: number): PerangkatDesa[] {
   return db
     .prepare('SELECT * FROM perangkat_desa WHERE desa_id = ? ORDER BY urutan ASC, id ASC')
     .all(desaId) as PerangkatDesa[];
+}
+
+export function getStatistikByDesaId(desaId: number, kategori?: string): StatistikDesa[] {
+  if (kategori) {
+    return db
+      .prepare('SELECT * FROM statistik_desa WHERE desa_id = ? AND kategori = ? ORDER BY urutan ASC')
+      .all(desaId, kategori) as StatistikDesa[];
+  }
+  return db
+    .prepare('SELECT * FROM statistik_desa WHERE desa_id = ? ORDER BY kategori ASC, urutan ASC')
+    .all(desaId) as StatistikDesa[];
+}
+
+/** Ringkasan penduduk semua desa (dari kategori jenis_kelamin) untuk tabel perbandingan. */
+export function getStatistikRingkasanSemuaDesa(): {
+  slug: string;
+  nama: string;
+  penduduk: number;
+  laki: number;
+  perempuan: number;
+  statistik_at: string | null;
+}[] {
+  return db
+    .prepare(
+      `SELECT d.slug, d.nama, d.statistik_at,
+              COALESCE(SUM(s.jumlah), 0) AS penduduk,
+              COALESCE(SUM(s.laki), 0) AS laki,
+              COALESCE(SUM(s.perempuan), 0) AS perempuan
+       FROM desa d
+       LEFT JOIN statistik_desa s ON s.desa_id = d.id AND s.kategori = 'jenis_kelamin'
+       WHERE d.is_active = 1
+       GROUP BY d.id
+       ORDER BY d.nama ASC`,
+    )
+    .all() as { slug: string; nama: string; penduduk: number; laki: number; perempuan: number; statistik_at: string | null }[];
 }
