@@ -29,11 +29,40 @@ export default function PetaBanjarmangu() {
     });
     mapInstanceRef.current = map;
 
-    // Base layer OpenStreetMap
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 18,
-    }).addTo(map);
+    // Base layer: CARTO (default) + Esri — tile.openstreetmap.org langsung
+    // memblokir situs produksi (Tile Usage Policy), jadi tidak dipakai lagi.
+    const cartoVoyager = L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+      {
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: "abcd",
+        maxZoom: 19,
+      },
+    );
+    const esriStreet = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+      {
+        attribution: "Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS",
+        maxZoom: 18,
+      },
+    );
+    const esriSatelit = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      {
+        attribution:
+          "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
+        maxZoom: 18,
+      },
+    );
+    cartoVoyager.addTo(map);
+    L.control
+      .layers(
+        { "Peta Jalan (CARTO)": cartoVoyager, "Peta Jalan (Esri)": esriStreet, "Satelit (Esri)": esriSatelit },
+        {},
+        { position: "topright" },
+      )
+      .addTo(map);
 
     // Load GeoJSON
     Promise.all([
