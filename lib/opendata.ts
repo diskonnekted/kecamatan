@@ -106,14 +106,19 @@ export async function getDanaDesaPerKecamatan(): Promise<DanaDesaResult | null> 
     const kecamatan = String(rec.Kecamatan ?? rec.kecamatan ?? '').trim();
     if (!kecamatan) continue;
     const tahun = toNum(rec.Tahun ?? rec.tahun);
-    // kolom nilai: cari key pertama yang mengandung 'Dana Desa'
+    // kolom nilai: dataset ini memakai 'Alokasi Dana'; dataset lain bisa 'Dana Desa'
     let nilai = 0;
     for (const [k, v] of Object.entries(rec)) {
-      if (/dana desa/i.test(k)) {
+      if (/alokasi dana|dana desa/i.test(k)) {
         nilai = toNum(v);
         break;
       }
     }
+    // Normalisasi satuan: sebagian besar baris tersimpan dalam RIBUAN rupiah,
+    // tapi baris 2018 (semua kecamatan) tersimpan dalam rupiah penuh.
+    // Dana desa level kecamatan selalu bermagnitudo miliaran rupiah, jadi
+    // nilai < 1e8 pasti ribuan -> konversi ke rupiah penuh.
+    if (nilai > 0 && nilai < 100_000_000) nilai *= 1000;
     rows.push({ kecamatan, tahun, nilai });
   }
   if (rows.length === 0) return null;
